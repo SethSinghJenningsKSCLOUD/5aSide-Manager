@@ -45,9 +45,9 @@
         <h3>Record Match Result & Adjust Rosters</h3>
         <form action="/record-score" method="POST">
             
-            <!-- Team Assignments (Pre-checked based on generated teams, but editable) -->
+            <!-- Team Assignments -->
             <div class="teams-container" style="margin-bottom: 20px;">
-                <div class="team-box">
+                <div class="team-box" id="team-a-box">
                     <h3>Team A (Rating: {{ match_result.team_a_rating }})</h3>
                     {% for player in players %}
                     <label style="display: block; margin-bottom: 5px; cursor: pointer;">
@@ -57,10 +57,10 @@
                     </label>
                     {% endfor %}
                     <br>
-                    <label><strong>Team A Score:</strong> <input type="number" name="score_a" min="0" required style="width: 60px; padding: 5px;"></label>
+                    <label><strong>Team A Score:</strong> <input type="number" name="score_a" min="0" style="width: 60px; padding: 5px;"></label>
                 </div>
 
-                <div class="team-box">
+                <div class="team-box" id="team-b-box">
                     <h3>Team B (Rating: {{ match_result.team_b_rating }})</h3>
                     {% for player in players %}
                     <label style="display: block; margin-bottom: 5px; cursor: pointer;">
@@ -70,8 +70,16 @@
                     </label>
                     {% endfor %}
                     <br>
-                    <label><strong>Team B Score:</strong> <input type="number" name="score_b" min="0" required style="width: 60px; padding: 5px;"></label>
+                    <label><strong>Team B Score:</strong> <input type="number" name="score_b" min="0" style="width: 60px; padding: 5px;"></label>
                 </div>
+            </div>
+
+            <!-- WHATSAPP COPY BUTTON -->
+            <div style="text-align: center; margin: 20px 0;">
+                <button type="button" onclick="copyTeamSheet()" style="background: #25D366; color: white; border: none; padding: 12px 20px; font-size: 1rem; font-weight: bold; border-radius: 6px; cursor: pointer;">
+                    📋 Copy Team Sheet for WhatsApp
+                </button>
+                <span id="copy-msg" style="display: block; color: #28a745; margin-top: 8px; font-weight: bold;"></span>
             </div>
 
             <!-- Optional Handicap Box -->
@@ -94,5 +102,36 @@
         </form>
     </div>
     {% endif %}
+
+    <script>
+    function copyTeamSheet() {
+        // Find checked players in Team A box
+        let teamA = [];
+        document.querySelectorAll('#team-a-box input[name="team_a_ids"]:checked').forEach(el => {
+            teamA.push(el.parentElement.innerText.trim());
+        });
+        
+        // Find checked players in Team B box
+        let teamB = [];
+        document.querySelectorAll('#team-b-box input[name="team_b_ids"]:checked').forEach(el => {
+            teamB.push(el.parentElement.innerText.trim());
+        });
+
+        // Format sheet
+        let sheet = `⚽ *MONDAY NIGHT 5-A-SIDE* ⚽\n\n`;
+        sheet += `🔵 *TEAM A*\n`;
+        teamA.forEach(p => sheet += `• ${p}\n`);
+        sheet += `\n🔴 *TEAM B*\n`;
+        teamB.forEach(p => sheet += `• ${p}\n`);
+        sheet += `\nSee you on the pitch! 👟🔥`;
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(sheet).then(() => {
+            let msg = document.getElementById('copy-msg');
+            msg.innerText = "Copied to clipboard! Ready to paste into WhatsApp.";
+            setTimeout(() => msg.innerText = "", 3000);
+        });
+    }
+    </script>
 </body>
 </html>
