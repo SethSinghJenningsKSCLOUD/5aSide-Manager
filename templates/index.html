@@ -25,7 +25,7 @@
         <div class="grid">
             {% for player in players %}
             <label class="player-card">
-                <input type="checkbox" name="available_players" value="{{ player.id }}">
+                <input type="checkbox" name="available_players" value="{{ player.id }}" {% if player.auto_select %}checked{% endif %}>
                 <strong>{{ player.name }}</strong><br>
                 <small>{% if player.is_core %}Core Member{% else %}Ringer{% endif %} | Elo: {{ player.elo_rating }}</small>
             </label>

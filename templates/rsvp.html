@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match RSVP - Monday Night 5-a-Side</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 500px; margin: 30px auto; padding: 0 20px; line-height: 1.5; background: #f8f9fa; color: #212529; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; }
+        .btn-group { display: flex; gap: 15px; margin-top: 20px; }
+        .btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: white; }
+        .btn-in { background: #28a745; }
+        .btn-out { background: #dc3545; }
+        .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
+        .player-btn { padding: 12px; border: 1px solid #ced4da; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .player-btn:hover { background: #e9ecef; }
+        .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
+        .status-IN { background: #d4edda; color: #155724; }
+        .status-OUT { background: #f8d7da; color: #721c24; }
+        .switch-link { margin-top: 25px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>⚽ Monday Night RSVP</h2>
+        <p><strong>Match Date:</strong> {{ match_date }}</p>
+
+        <!-- STEP 1: INITIAL PLAYER SELECTION (hidden once device remembers player) -->
+        <div id="select-step">
+            <h3>Who are you?</h3>
+            <div class="player-grid">
+                {% for player in players %}
+                <button class="player-btn" onclick="selectPlayer({{ player.id }}, '{{ player.name }}')">
+                    {{ player.name }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- STEP 2: REMEMBERED PLAYER ACTION -->
+        <div id="rsvp-step" style="display: none;">
+            <h3 id="welcome-msg"></h3>
+            
+            <div id="current-status-box"></div>
+
+            <form action="/rsvp" method="POST" id="rsvp-form">
+                <input type="hidden" name="player_id" id="form-player-id">
+                <input type="hidden" name="status" id="form-status">
+                
+                <div class="btn-group">
+                    <button type="button" class="btn btn-in" onclick="submitVote('IN')">I'm In 🟢</button>
+                    <button type="button" class="btn btn-out" onclick="submitVote('OUT')">I'm Out 🔴</button>
+                </div>
+            </form>
+
+            <span class="switch-link" onclick="clearSavedPlayer()">Not you? Switch player</span>
+        </div>
+    </div>
+
+    <script>
+        const rsvps = {{ rsvps | tojson }};
+        const players = {{ players | tojson }};
+
+        function init() {
+            const savedId = localStorage.getItem('5aside_player_id');
+            const savedName = localStorage.getItem('5aside_player_name');
+
+            if (savedId && savedName) {
+                showRsvpScreen(savedId, savedName);
+            }
+        }
+
+        function selectPlayer(id, name) {
+            localStorage.setItem('5aside_player_id', id);
+            localStorage.setItem('5aside_player_name', name);
+            showRsvpScreen(id, name);
+        }
+
+        function showRsvpScreen(id, name) {
+            document.getElementById('select-step').style.display = 'none';
+            document.getElementById('rsvp-step').style.display = 'block';
+            document.getElementById('welcome-msg').innerText = `Hey ${name}!`;
+            document.getElementById('form-player-id').value = id;
+
+            const currentStatus = rsvps[id];
+            const statusBox = document.getElementById('current-status-box');
+            if (currentStatus) {
+                statusBox.innerHTML = `<div class="status-badge status-${currentStatus}">Current Status: You're ${currentStatus}</div>`;
+            } else {
+                statusBox.innerHTML = `<p style="color:#6c757d;">You haven't responded yet for this week.</p>`;
+            }
+        }
+
+        function submitVote(status) {
+            document.getElementById('form-status').value = status;
+            document.getElementById('rsvp-form').submit();
+        }
+
+        function clearSavedPlayer() {
+            localStorage.removeItem('5aside_player_id');
+            localStorage.removeItem('5aside_player_name');
+            document.getElementById('rsvp-step').style.display = 'none';
+            document.getElementById('select-step').style.display = 'block';
+        }
+
+        init();
+    </script>
+</body>
+</html>
