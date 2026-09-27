@@ -25,12 +25,12 @@
         <h2>⚽ Monday Night RSVP</h2>
         <p><strong>Match Date:</strong> {{ match_date }}</p>
 
-        <!-- STEP 1: INITIAL PLAYER SELECTION (hidden once device remembers player) -->
+        <!-- STEP 1: INITIAL PLAYER SELECTION -->
         <div id="select-step">
             <h3>Who are you?</h3>
             <div class="player-grid">
                 {% for player in players %}
-                <button class="player-btn" onclick="selectPlayer({{ player.id }}, '{{ player.name }}')">
+                <button class="player-btn" data-id="{{ player.id }}" data-name="{{ player.name }}" onclick="handlePlayerClick(this)">
                     {{ player.name }}
                 </button>
                 {% endfor %}
@@ -59,7 +59,6 @@
 
     <script>
         const rsvps = {{ rsvps | tojson }};
-        const players = {{ players | tojson }};
 
         function init() {
             const savedId = localStorage.getItem('5aside_player_id');
@@ -70,7 +69,10 @@
             }
         }
 
-        function selectPlayer(id, name) {
+        function handlePlayerClick(button) {
+            const id = button.getAttribute('data-id');
+            const name = button.getAttribute('data-name');
+            
             localStorage.setItem('5aside_player_id', id);
             localStorage.setItem('5aside_player_name', name);
             showRsvpScreen(id, name);
