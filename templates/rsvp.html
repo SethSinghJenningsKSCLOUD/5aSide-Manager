@@ -85,15 +85,36 @@
 
     <script>
         const rsvps = {{ rsvps | tojson }};
+        const players = {{ players | tojson }};
 
         function setStorage(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
         function getStorage(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
         function removeStorage(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
         function init() {
+            // Check if player just registered via URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const newId = urlParams.get('new_id');
+            const newName = urlParams.get('new_name');
+
+            if (newId && newName) {
+                setStorage('5aside_player_id', newId);
+                setStorage('5aside_player_name', newName);
+                // Clean up URL so params don't linger on refresh
+                window.history.replaceState({}, document.title, window.location.pathname);
+                showRsvpScreen(newId, newName);
+                return;
+            }
+
             const savedId = getStorage('5aside_player_id');
             const savedName = getStorage('5aside_player_name');
-            if (savedId && savedName) showRsvpScreen(savedId, savedName);
+            const playerExists = players && players.some(p => p.id === savedId);
+
+            if (savedId && savedName && playerExists) {
+                showRsvpScreen(savedId, savedName);
+            } else if (savedId && !playerExists) {
+                clearSavedPlayer();
+            }
         }
 
         function handlePlayerClick(btn) {
@@ -113,6 +134,7 @@
 
             const currentStatus = rsvps[id];
             const statusBox = document.getElementById('current-status-box');
+            
             if (currentStatus) {
                 statusBox.innerHTML = `<div class="status-badge status-${currentStatus}">Current Status: You're ${currentStatus}</div>`;
             } else {
@@ -139,6 +161,7 @@
             removeStorage('5aside_player_id');
             removeStorage('5aside_player_name');
             document.getElementById('rsvp-step').style.display = 'none';
+            document.getElementById('new-player-step').style.display = 'none';
             document.getElementById('select-step').style.display = 'block';
         }
 

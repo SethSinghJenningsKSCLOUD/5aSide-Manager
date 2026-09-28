@@ -190,11 +190,10 @@ def add_player_rsvp():
                 on_conflict="player_id, match_date",
             ).execute()
 
-            return render_template(
-                "rsvp_success.html", player_id=p_id, name=name
-            )
+            # Redirect back to RSVP page and pass new player details in URL
+            return redirect(url_for("rsvp_page", new_id=p_id, new_name=name))
 
-    return redirect("/rsvp")
+    return redirect(url_for("rsvp_page"))
 
 
 @app.route("/record-score", methods=["POST"])
