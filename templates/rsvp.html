@@ -14,10 +14,13 @@
         .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
         .player-btn { padding: 12px; border: 1px solid #ced4da; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
         .player-btn:hover { background: #e9ecef; }
+        .new-btn { background: #0066cc; color: white; border: none; }
+        .new-btn:hover { background: #0052a3; }
         .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
         .status-IN { background: #d4edda; color: #155724; }
         .status-OUT { background: #f8d7da; color: #721c24; }
         .switch-link { margin-top: 25px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -25,22 +28,45 @@
         <h2>⚽ Monday Night RSVP</h2>
         <p><strong>Match Date:</strong> {{ match_date }}</p>
 
-        <!-- STEP 1: INITIAL PLAYER SELECTION -->
+        <!-- STEP 1: PLAYER SELECTION -->
         <div id="select-step">
             <h3>Who are you?</h3>
             <div class="player-grid">
                 {% for player in players %}
-                <button class="player-btn" data-id="{{ player.id }}" data-name="{{ player.name }}" onclick="handlePlayerClick(this)">
+                <button type="button" class="player-btn" data-id="{{ player.id }}" data-name="{{ player.name }}" onclick="handlePlayerClick(this)">
                     {{ player.name }}
                 </button>
                 {% endfor %}
+                <button type="button" class="player-btn new-btn" onclick="showNewPlayerForm()">
+                    ➕ New Player
+                </button>
             </div>
+        </div>
+
+        <!-- NEW PLAYER FORM -->
+        <div id="new-player-step" style="display: none; text-align: left;">
+            <h3>Register New Player</h3>
+            <form action="/add-player-rsvp" method="POST">
+                <label><strong>Your Name:</strong></label>
+                <input type="text" name="name" required placeholder="e.g. Dave Smith">
+
+                <label><strong>Self Assessment Rating:</strong></label>
+                <select name="rating">
+                    <option value="1">⭐ 1 - Total Beginner </option>
+                    <option value="2">⭐⭐ 2 - Reliable </option>
+                    <option value="3" selected>⭐⭐⭐ 3 - Good </option>
+                    <option value="4">⭐⭐⭐⭐ 4 - Strong </option>
+                    <option value="5">⭐⭐⭐⭐⭐ 5 - Unstoppable</option>
+                </select>
+
+                <button type="submit" class="btn btn-in" style="width: 100%; margin-top: 15px;">Save & Mark Me IN 🟢</button>
+                <span class="switch-link" onclick="hideNewPlayerForm()" style="display: block; text-align: center;">Cancel</span>
+            </form>
         </div>
 
         <!-- STEP 2: REMEMBERED PLAYER ACTION -->
         <div id="rsvp-step" style="display: none;">
             <h3 id="welcome-msg"></h3>
-            
             <div id="current-status-box"></div>
 
             <form action="/rsvp" method="POST" id="rsvp-form">
@@ -60,26 +86,27 @@
     <script>
         const rsvps = {{ rsvps | tojson }};
 
-        function init() {
-            const savedId = localStorage.getItem('5aside_player_id');
-            const savedName = localStorage.getItem('5aside_player_name');
+        function setStorage(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+        function getStorage(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+        function removeStorage(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
-            if (savedId && savedName) {
-                showRsvpScreen(savedId, savedName);
-            }
+        function init() {
+            const savedId = getStorage('5aside_player_id');
+            const savedName = getStorage('5aside_player_name');
+            if (savedId && savedName) showRsvpScreen(savedId, savedName);
         }
 
-        function handlePlayerClick(button) {
-            const id = button.getAttribute('data-id');
-            const name = button.getAttribute('data-name');
-            
-            localStorage.setItem('5aside_player_id', id);
-            localStorage.setItem('5aside_player_name', name);
+        function handlePlayerClick(btn) {
+            const id = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name');
+            setStorage('5aside_player_id', id);
+            setStorage('5aside_player_name', name);
             showRsvpScreen(id, name);
         }
 
         function showRsvpScreen(id, name) {
             document.getElementById('select-step').style.display = 'none';
+            document.getElementById('new-player-step').style.display = 'none';
             document.getElementById('rsvp-step').style.display = 'block';
             document.getElementById('welcome-msg').innerText = `Hey ${name}!`;
             document.getElementById('form-player-id').value = id;
@@ -93,14 +120,24 @@
             }
         }
 
+        function showNewPlayerForm() {
+            document.getElementById('select-step').style.display = 'none';
+            document.getElementById('new-player-step').style.display = 'block';
+        }
+
+        function hideNewPlayerForm() {
+            document.getElementById('new-player-step').style.display = 'none';
+            document.getElementById('select-step').style.display = 'block';
+        }
+
         function submitVote(status) {
             document.getElementById('form-status').value = status;
             document.getElementById('rsvp-form').submit();
         }
 
         function clearSavedPlayer() {
-            localStorage.removeItem('5aside_player_id');
-            localStorage.removeItem('5aside_player_name');
+            removeStorage('5aside_player_id');
+            removeStorage('5aside_player_name');
             document.getElementById('rsvp-step').style.display = 'none';
             document.getElementById('select-step').style.display = 'block';
         }
