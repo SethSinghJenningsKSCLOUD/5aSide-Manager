@@ -5,30 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Match RSVP - Monday Night 5-a-Side</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 500px; margin: 30px auto; padding: 0 20px; line-height: 1.5; background: #f8f9fa; color: #212529; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; }
-        .btn-group { display: flex; gap: 15px; margin-top: 20px; }
-        .btn { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: white; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 550px; margin: 20px auto; padding: 0 15px; line-height: 1.5; background: #f8f9fa; color: #212529; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; margin-bottom: 20px; }
+        .btn-group { display: flex; gap: 15px; margin-top: 15px; }
+        .btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: white; }
         .btn-in { background: #28a745; }
         .btn-out { background: #dc3545; }
         .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
         .player-btn { padding: 12px; border: 1px solid #ced4da; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
         .player-btn:hover { background: #e9ecef; }
         .new-btn { background: #0066cc; color: white; border: none; }
-        .new-btn:hover { background: #0052a3; }
         .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
         .status-IN { background: #d4edda; color: #155724; }
         .status-OUT { background: #f8d7da; color: #721c24; }
-        .switch-link { margin-top: 25px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
+        .switch-link { margin-top: 20px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
+        
+        /* Streaks & Dashboard Styling */
+        .streak-banner { background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.95rem; font-weight: 600; }
+        .roster-section { text-align: left; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
+        .roster-header { font-size: 1rem; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px; }
+        .tag { padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+        .tag-in { background: #e6f4ea; color: #137333; border: 1px solid #ceedd5; }
+        .tag-out { background: #fce8e6; color: #c5221f; border: 1px solid #fad2cf; }
+        .tag-pending { background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; }
+        .ringer-alert { background: #e8f0fe; color: #1a73e8; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; }
         input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; }
     </style>
 </head>
 <body>
     <div class="card">
         <h2>⚽ Monday Night RSVP</h2>
-        <p><strong>Match Date:</strong> {{ match_date }}</p>
+        <p style="margin-top: -10px; color: #6c757d;"><strong>Match Date:</strong> {{ match_date }}</p>
 
-        <!-- STEP 1: PLAYER SELECTION -->
+        <!-- STEP 1: INITIAL PLAYER SELECTION -->
         <div id="select-step">
             <h3>Who are you?</h3>
             <div class="player-grid">
@@ -48,15 +58,15 @@
             <h3>Register New Player</h3>
             <form action="/add-player-rsvp" method="POST">
                 <label><strong>Your Name:</strong></label>
-                <input type="text" name="name" required placeholder="e.g. Lionel Messi / Lauren James">
+                <input type="text" name="name" required placeholder="e.g. Dave Smith">
 
                 <label><strong>Self Assessment Rating:</strong></label>
                 <select name="rating">
-                    <option value="1">⭐ 1 - Total Beginner </option>
-                    <option value="2">⭐⭐ 2 - Reliable </option>
-                    <option value="3" selected>⭐⭐⭐ 3 - Good </option>
-                    <option value="4">⭐⭐⭐⭐ 4 - Strong </option>
-                    <option value="5">⭐⭐⭐⭐⭐ 5 - Unstoppable</option>
+                    <option value="1">⭐ 1 - Beginner / Low fitness</option>
+                    <option value="2">⭐⭐ 2 - Casual / Plays rarely</option>
+                    <option value="3" selected>⭐⭐⭐ 3 - Average / Solid regular</option>
+                    <option value="4">⭐⭐⭐⭐ 4 - Strong / Good fitness</option>
+                    <option value="5">⭐⭐⭐⭐⭐ 5 - Ringer / Unstoppable</option>
                 </select>
 
                 <button type="submit" class="btn btn-in" style="width: 100%; margin-top: 15px;">Save & Mark Me IN 🟢</button>
@@ -66,7 +76,9 @@
 
         <!-- STEP 2: REMEMBERED PLAYER ACTION -->
         <div id="rsvp-step" style="display: none;">
-            <h3 id="welcome-msg"></h3>
+            <h3 id="welcome-msg" style="margin-bottom: 5px;"></h3>
+            
+            <div id="personal-streak-box"></div>
             <div id="current-status-box"></div>
 
             <form action="/rsvp" method="POST" id="rsvp-form">
@@ -81,6 +93,27 @@
 
             <span class="switch-link" onclick="clearSavedPlayer()">Not you? Switch player</span>
         </div>
+
+        <!-- LIVE RESPONSE DASHBOARD -->
+        <div class="roster-section">
+            <div class="roster-header">
+                <span>🟢 Playing This Week</span>
+                <span id="in-count-badge">0 / 10</span>
+            </div>
+            
+            <div id="ringer-needed-box"></div>
+            <div class="tag-list" id="in-players-list"></div>
+
+            <div class="roster-header" style="font-size: 0.9rem; color: #dc3545; margin-top: 10px;">
+                <span>🔴 Unavailable (<span id="out-count">0</span>)</span>
+            </div>
+            <div class="tag-list" id="out-players-list"></div>
+
+            <div class="roster-header" style="font-size: 0.9rem; color: #6c757d; margin-top: 10px;">
+                <span>⏳ Awaiting Response (<span id="pending-count">0</span>)</span>
+            </div>
+            <div class="tag-list" id="pending-players-list"></div>
+        </div>
     </div>
 
     <script>
@@ -91,8 +124,59 @@
         function getStorage(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
         function removeStorage(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
+        function renderRosterDashboard() {
+            const inList = document.getElementById('in-players-list');
+            const outList = document.getElementById('out-players-list');
+            const pendingList = document.getElementById('pending-players-list');
+            
+            inList.innerHTML = '';
+            outList.innerHTML = '';
+            pendingList.innerHTML = '';
+
+            let inCount = 0;
+            let outCount = 0;
+            let pendingCount = 0;
+
+            players.forEach(p => {
+                const status = rsvps[p.id];
+                
+                // Build badges for streak highlights
+                let streakLabel = '';
+                if (p.win_streak >= 2) {
+                    streakLabel += ` 🔥 ${p.win_streak}W`;
+                } else if (p.attn_streak >= 3) {
+                    streakLabel += ` ⚡ ${p.attn_streak} games`;
+                }
+
+                if (status === 'IN') {
+                    inCount++;
+                    inList.innerHTML += `<span class="tag tag-in">${p.name}${streakLabel}</span>`;
+                } else if (status === 'OUT') {
+                    outCount++;
+                    outList.innerHTML += `<span class="tag tag-out">${p.name}</span>`;
+                } else {
+                    pendingCount++;
+                    pendingList.innerHTML += `<span class="tag tag-pending">${p.name}</span>`;
+                }
+            });
+
+            document.getElementById('in-count-badge').innerText = `${inCount} / 10`;
+            document.getElementById('out-count').innerText = outCount;
+            document.getElementById('pending-count').innerText = pendingCount;
+
+            // Ringer notification box
+            const ringerBox = document.getElementById('ringer-needed-box');
+            if (inCount < 10) {
+                const needed = 10 - inCount;
+                ringerBox.innerHTML = `<div class="ringer-alert">🚨 Need <strong>${needed} more player${needed > 1 ? 's' : ''}</strong> for 5-a-side! Help find ringers.</div>`;
+            } else {
+                ringerBox.innerHTML = `<div class="ringer-alert" style="background:#d4edda; color:#155724;">✅ Full squad reached! (${inCount} players attending)</div>`;
+            }
+        }
+
         function init() {
-            // Check if player just registered via URL parameters
+            renderRosterDashboard();
+
             const urlParams = new URLSearchParams(window.location.search);
             const newId = urlParams.get('new_id');
             const newName = urlParams.get('new_name');
@@ -100,7 +184,6 @@
             if (newId && newName) {
                 setStorage('5aside_player_id', newId);
                 setStorage('5aside_player_name', newName);
-                // Clean up URL so params don't linger on refresh
                 window.history.replaceState({}, document.title, window.location.pathname);
                 showRsvpScreen(newId, newName);
                 return;
@@ -131,6 +214,20 @@
             document.getElementById('rsvp-step').style.display = 'block';
             document.getElementById('welcome-msg').innerText = `Hey ${name}!`;
             document.getElementById('form-player-id').value = id;
+
+            const playerObj = players.find(p => p.id === id);
+            const streakBox = document.getElementById('personal-streak-box');
+            
+            // Personal streak messages
+            if (playerObj) {
+                if (playerObj.win_streak >= 2) {
+                    streakBox.innerHTML = `<div class="streak-banner">🔥 Hot streak! You're on a <strong>${playerObj.win_streak} game winning streak</strong>!</div>`;
+                } else if (playerObj.attn_streak >= 3) {
+                    streakBox.innerHTML = `<div class="streak-banner">⚡ Great loyalty! You've played <strong>${playerObj.attn_streak} weeks in a row</strong>!</div>`;
+                } else {
+                    streakBox.innerHTML = '';
+                }
+            }
 
             const currentStatus = rsvps[id];
             const statusBox = document.getElementById('current-status-box');

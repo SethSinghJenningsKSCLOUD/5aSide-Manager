@@ -91,6 +91,71 @@ def generate():
     )
 
 
+def get_player_streaks():
+    # Fetch completed matches in descending order
+    matches_res = (
+        supabase.table("matches")
+        .select("*")
+        .eq("is_completed", True)
+        .order("match_date", desc=True)
+        .execute()
+    )
+    matches = matches_res.data or []
+
+    # Fetch attendance
+    attendance_res = supabase.table("match_attendance").select("*").execute()
+    attendance = attendance_res.data or []
+
+    match_att_map = {}
+    for att in attendance:
+        m_id = att["match_id"]
+        if m_id not in match_att_map:
+            match_att_map[m_id] = []
+        match_att_map[m_id].append(att)
+
+    players_res = supabase.table("players").select("id").execute()
+    all_p_ids = [p["id"] for p in (players_res.data or [])]
+
+    attendance_streaks = {}
+    win_streaks = {}
+
+    for p_id in all_p_ids:
+        # 1. Attendance Streak (consecutive matches played starting from most recent)
+        attn_streak = 0
+        for m in matches:
+            m_id = m["id"]
+            m_atts = match_att_map.get(m_id, [])
+            if any(a["player_id"] == p_id for a in m_atts):
+                attn_streak += 1
+            else:
+                break
+        attendance_streaks[p_id] = attn_streak
+
+        # 2. Win Streak (consecutive matches played AND won by player)
+        win_streak = 0
+        for m in matches:
+            m_id = m["id"]
+            m_atts = match_att_map.get(m_id, [])
+            p_att = next((a for a in m_atts if a["player_id"] == p_id), None)
+            if not p_att:
+                continue
+
+            team = p_att["team_assigned"]
+            score_a = m.get("team_a_score", 0)
+            score_b = m.get("team_b_score", 0)
+
+            won = (team == "A" and score_a > score_b) or (
+                team == "B" and score_b > score_a
+            )
+            if won:
+                win_streak += 1
+            else:
+                break
+        win_streaks[p_id] = win_streak
+
+    return attendance_streaks, win_streaks
+
+
 @app.route("/rsvp", methods=["GET"])
 def rsvp_page():
     upcoming_date = get_upcoming_monday()
@@ -107,10 +172,16 @@ def rsvp_page():
     )
     rsvps = {row["player_id"]: row["status"] for row in (avail_resp.data or [])}
 
+    # Fetch Streaks
+    attn_streaks, win_streaks = get_player_streaks()
+
+    for p in players:
+        p["attn_streak"] = attn_streaks.get(p["id"], 0)
+        p["win_streak"] = win_streaks.get(p["id"], 0)
+
     return render_template(
         "rsvp.html", players=players, rsvps=rsvps, match_date=upcoming_date
     )
-
 
 @app.route("/rsvp", methods=["POST"])
 def submit_rsvp():
