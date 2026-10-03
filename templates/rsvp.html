@@ -217,7 +217,7 @@
             const ringerBox = document.getElementById('ringer-needed-box');
             if (inCount < 10) {
                 const needed = 10 - inCount;
-                ringerBox.innerHTML = `<div class="ringer-alert">🚨 Need <strong>${needed} more player${needed > 1 ? 's' : ''}</strong> for 5-a-side! Help find ringers.</div>`;
+                ringerBox.innerHTML = `<div class="ringer-alert">🚨 Need <strong>${needed} more player${needed > 1 ? 's' : ''}</strong> for 5-a-side! We need ringers!</div>`;
             } else {
                 ringerBox.innerHTML = `<div class="ringer-alert" style="background:#d4edda; color:#155724;">✅ Full squad reached! (${inCount} players attending)</div>`;
             }
