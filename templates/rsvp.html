@@ -20,7 +20,6 @@
         .status-OUT { background: #f8d7da; color: #721c24; }
         .switch-link { margin-top: 20px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
         
-        /* Streaks & Dashboard Styling */
         .streak-banner { background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.95rem; font-weight: 600; }
         .roster-section { text-align: left; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
         .roster-header { font-size: 1rem; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
@@ -30,6 +29,11 @@
         .tag-out { background: #fce8e6; color: #c5221f; border: 1px solid #fad2cf; }
         .tag-pending { background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; }
         .ringer-alert { background: #e8f0fe; color: #1a73e8; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; }
+        
+        /* Legend & Form Feed */
+        .legend-box { background: #f8f9fa; border: 1px solid #e9ecef; padding: 12px; border-radius: 8px; text-align: left; margin-top: 15px; font-size: 0.85rem; }
+        .feed-list { text-align: left; margin: 10px 0; padding-left: 0; list-style: none; font-size: 0.9rem; }
+        .feed-item { padding: 6px 0; border-bottom: 1px dashed #eee; color: #495057; }
         input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; }
     </style>
 </head>
@@ -62,11 +66,11 @@
 
                 <label><strong>Self Assessment Rating:</strong></label>
                 <select name="rating">
-                    <option value="1">⭐ 1 - Beginner / Low fitness</option>
-                    <option value="2">⭐⭐ 2 - Casual / Plays rarely</option>
-                    <option value="3" selected>⭐⭐⭐ 3 - Average / Solid regular</option>
-                    <option value="4">⭐⭐⭐⭐ 4 - Strong / Good fitness</option>
-                    <option value="5">⭐⭐⭐⭐⭐ 5 - Ringer / Unstoppable</option>
+                    <option value="1">⭐ 1 - Beginner / Low fitness (700 Elo)</option>
+                    <option value="2">⭐⭐ 2 - Casual / Plays rarely (850 Elo)</option>
+                    <option value="3" selected>⭐⭐⭐ 3 - Average / Solid regular (1000 Elo)</option>
+                    <option value="4">⭐⭐⭐⭐ 4 - Strong / Good fitness (1150 Elo)</option>
+                    <option value="5">⭐⭐⭐⭐⭐ 5 - Ringer / Unstoppable (1300 Elo)</option>
                 </select>
 
                 <button type="submit" class="btn btn-in" style="width: 100%; margin-top: 15px;">Save & Mark Me IN 🟢</button>
@@ -104,6 +108,14 @@
             <div id="ringer-needed-box"></div>
             <div class="tag-list" id="in-players-list"></div>
 
+            <!-- FORM & MILESTONE WRITTEN FEED -->
+            <div id="milestone-feed-box" style="display: none;">
+                <div class="roster-header" style="font-size: 0.9rem; color: #495057; margin-top: 10px;">
+                    <span>🔥 Form & Milestones</span>
+                </div>
+                <ul class="feed-list" id="feed-list"></ul>
+            </div>
+
             <div class="roster-header" style="font-size: 0.9rem; color: #dc3545; margin-top: 10px;">
                 <span>🔴 Unavailable (<span id="out-count">0</span>)</span>
             </div>
@@ -113,6 +125,17 @@
                 <span>⏳ Awaiting Response (<span id="pending-count">0</span>)</span>
             </div>
             <div class="tag-list" id="pending-players-list"></div>
+        </div>
+
+        <!-- EMOJI KEY / LEGEND -->
+        <div class="legend-box">
+            <strong>📖 Emoji Key:</strong>
+            <div style="margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                <div>🔥 <strong>Fire:</strong> 2+ Win Streak</div>
+                <div>⚡ <strong>Lightning:</strong> 3+ Weeks Played</div>
+                <div>👑 <strong>Crown:</strong> 70%+ Win Rate (10+ Games)</div>
+                <div>🛡️ <strong>Shield:</strong> 75%+ Attendance (10+ Games)</div>
+            </div>
         </div>
     </div>
 
@@ -128,29 +151,46 @@
             const inList = document.getElementById('in-players-list');
             const outList = document.getElementById('out-players-list');
             const pendingList = document.getElementById('pending-players-list');
+            const feedList = document.getElementById('feed-list');
+            const feedBox = document.getElementById('milestone-feed-box');
             
             inList.innerHTML = '';
             outList.innerHTML = '';
             pendingList.innerHTML = '';
+            feedList.innerHTML = '';
 
             let inCount = 0;
             let outCount = 0;
             let pendingCount = 0;
+            let feedItems = [];
 
             players.forEach(p => {
                 const status = rsvps[p.id];
                 
-                // Build badges for streak highlights
-                let streakLabel = '';
+                // Build badges for tag badges
+                let tagBadges = '';
+                if (p.win_streak >= 2) tagBadges += ' 🔥';
+                else if (p.attn_streak >= 3) tagBadges += ' ⚡';
+                if (p.win_pct !== null && p.win_pct >= 70) tagBadges += ' 👑';
+                if (p.attn_pct !== null && p.attn_pct >= 75) tagBadges += ' 🛡️';
+
+                // Build written feed explanations
                 if (p.win_streak >= 2) {
-                    streakLabel += ` 🔥 ${p.win_streak}W`;
+                    feedItems.push(`🔥 <strong>${p.name}</strong> has won ${p.win_streak} games on the bounce!`);
                 } else if (p.attn_streak >= 3) {
-                    streakLabel += ` ⚡ ${p.attn_streak} games`;
+                    feedItems.push(`⚡ <strong>${p.name}</strong> has played ${p.attn_streak} weeks in a row!`);
+                }
+
+                if (p.win_pct !== null && p.win_pct >= 70) {
+                    feedItems.push(`👑 <strong>${p.name}</strong> has an elite ${p.win_pct}% win rate (${p.appearances} games played).`);
+                }
+                if (p.attn_pct !== null && p.attn_pct >= 75) {
+                    feedItems.push(`🛡️ <strong>${p.name}</strong> is a core die-hard (${p.attn_pct}% attendance across ${p.appearances} games).`);
                 }
 
                 if (status === 'IN') {
                     inCount++;
-                    inList.innerHTML += `<span class="tag tag-in">${p.name}${streakLabel}</span>`;
+                    inList.innerHTML += `<span class="tag tag-in">${p.name}${tagBadges}</span>`;
                 } else if (status === 'OUT') {
                     outCount++;
                     outList.innerHTML += `<span class="tag tag-out">${p.name}</span>`;
@@ -160,11 +200,20 @@
                 }
             });
 
+            // Render Feed if any items exist
+            if (feedItems.length > 0) {
+                feedBox.style.display = 'block';
+                feedItems.forEach(item => {
+                    feedList.innerHTML += `<li class="feed-item">${item}</li>`;
+                });
+            } else {
+                feedBox.style.display = 'none';
+            }
+
             document.getElementById('in-count-badge').innerText = `${inCount} / 10`;
             document.getElementById('out-count').innerText = outCount;
             document.getElementById('pending-count').innerText = pendingCount;
 
-            // Ringer notification box
             const ringerBox = document.getElementById('ringer-needed-box');
             if (inCount < 10) {
                 const needed = 10 - inCount;
@@ -218,7 +267,6 @@
             const playerObj = players.find(p => p.id === id);
             const streakBox = document.getElementById('personal-streak-box');
             
-            // Personal streak messages
             if (playerObj) {
                 if (playerObj.win_streak >= 2) {
                     streakBox.innerHTML = `<div class="streak-banner">🔥 Hot streak! You're on a <strong>${playerObj.win_streak} game winning streak</strong>!</div>`;
