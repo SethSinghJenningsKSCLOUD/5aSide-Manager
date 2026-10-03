@@ -24,16 +24,22 @@
         .roster-section { text-align: left; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
         .roster-header { font-size: 1rem; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px; }
-        .tag { padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+        .tag { padding: 5px 12px; border-radius: 15px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; transition: transform 0.1s ease; }
+        .tag:active { transform: scale(0.96); }
         .tag-in { background: #e6f4ea; color: #137333; border: 1px solid #ceedd5; }
         .tag-out { background: #fce8e6; color: #c5221f; border: 1px solid #fad2cf; }
         .tag-pending { background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; }
         .ringer-alert { background: #e8f0fe; color: #1a73e8; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; }
         
-        /* Legend & Form Feed */
         .legend-box { background: #f8f9fa; border: 1px solid #e9ecef; padding: 12px; border-radius: 8px; text-align: left; margin-top: 15px; font-size: 0.85rem; }
         .feed-list { text-align: left; margin: 10px 0; padding-left: 0; list-style: none; font-size: 0.9rem; }
         .feed-item { padding: 6px 0; border-bottom: 1px dashed #eee; color: #495057; }
+        
+        /* Interactive Pop-up Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-card { background: white; padding: 22px; border-radius: 14px; width: 85%; max-width: 330px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.15); animation: popIn 0.15s ease-out; }
+        .modal-close-btn { margin-top: 15px; width: 100%; padding: 10px; background: #0066cc; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; }
     </style>
 </head>
@@ -134,8 +140,17 @@
                 <div>🔥 <strong>Fire:</strong> 2+ Win Streak</div>
                 <div>⚡ <strong>Lightning:</strong> 3+ Weeks Played</div>
                 <div>👑 <strong>Crown:</strong> 70%+ Win Rate (10+ Games)</div>
-                <div>🛡️ <strong>Shield:</strong> 75%+ Attendance (10+ Games)</div>
+                <div>🛡️️ <strong>Shield:</strong> 75%+ Attendance (10+ Games)</div>
             </div>
+        </div>
+    </div>
+
+    <!-- PLAYER STATS MODAL POP-UP -->
+    <div id="stats-modal" class="modal-overlay" style="display: none;" onclick="closeModalOnBg(event)">
+        <div class="modal-card">
+            <h3 id="modal-player-name" style="margin-top: 0; margin-bottom: 5px;"></h3>
+            <div id="modal-stats-body"></div>
+            <button class="modal-close-btn" onclick="closeModal()">Close</button>
         </div>
     </div>
 
@@ -167,14 +182,12 @@
             players.forEach(p => {
                 const status = rsvps[p.id];
                 
-                // Build badges for tag badges
                 let tagBadges = '';
                 if (p.win_streak >= 2) tagBadges += ' 🔥';
                 else if (p.attn_streak >= 3) tagBadges += ' ⚡';
                 if (p.win_pct !== null && p.win_pct >= 70) tagBadges += ' 👑';
                 if (p.attn_pct !== null && p.attn_pct >= 75) tagBadges += ' 🛡️';
 
-                // Build written feed explanations
                 if (p.win_streak >= 2) {
                     feedItems.push(`🔥 <strong>${p.name}</strong> has won ${p.win_streak} games on the bounce!`);
                 } else if (p.attn_streak >= 3) {
@@ -188,19 +201,20 @@
                     feedItems.push(`🛡️ <strong>${p.name}</strong> is a core die-hard (${p.attn_pct}% attendance across ${p.appearances} games).`);
                 }
 
+                const tagHtml = `<span class="tag ${status === 'IN' ? 'tag-in' : status === 'OUT' ? 'tag-out' : 'tag-pending'}" onclick="showPlayerStatsModal('${p.id}')">${p.name}${tagBadges}</span>`;
+
                 if (status === 'IN') {
                     inCount++;
-                    inList.innerHTML += `<span class="tag tag-in">${p.name}${tagBadges}</span>`;
+                    inList.innerHTML += tagHtml;
                 } else if (status === 'OUT') {
                     outCount++;
-                    outList.innerHTML += `<span class="tag tag-out">${p.name}</span>`;
+                    outList.innerHTML += tagHtml;
                 } else {
                     pendingCount++;
-                    pendingList.innerHTML += `<span class="tag tag-pending">${p.name}</span>`;
+                    pendingList.innerHTML += tagHtml;
                 }
             });
 
-            // Render Feed if any items exist
             if (feedItems.length > 0) {
                 feedBox.style.display = 'block';
                 feedItems.forEach(item => {
@@ -221,6 +235,38 @@
             } else {
                 ringerBox.innerHTML = `<div class="ringer-alert" style="background:#d4edda; color:#155724;">✅ Full squad reached! (${inCount} players attending)</div>`;
             }
+        }
+
+        function showPlayerStatsModal(playerId) {
+            const p = players.find(player => player.id === playerId);
+            if (!p) return;
+
+            let details = [];
+            if (p.win_streak >= 2) details.push(`🔥 <strong>Winning Streak:</strong> ${p.win_streak} games on the bounce`);
+            if (p.attn_streak >= 3) details.push(`⚡ <strong>Attendance Streak:</strong> ${p.attn_streak} weeks in a row`);
+            if (p.win_pct !== null && p.win_pct >= 70) details.push(`👑 <strong>Elite Win Rate:</strong> ${p.win_pct}% (${p.appearances} games)`);
+            if (p.attn_pct !== null && p.attn_pct >= 75) details.push(`🛡️ <strong>Die-hard Attendance:</strong> ${p.attn_pct}% (${p.appearances} games)`);
+
+            let bodyHtml = '';
+            if (details.length > 0) {
+                bodyHtml = '<ul style="text-align: left; padding-left: 15px; margin: 10px 0; font-size: 0.9rem;">' +
+                    details.map(d => `<li style="margin: 8px 0;">${d}</li>`).join('') +
+                    '</ul>';
+            } else {
+                bodyHtml = `<p style="color: #6c757d; margin: 15px 0; font-size: 0.9rem;">No active streaks or badges currently.<br><small>Total matches played: <strong>${p.appearances || 0}</strong></small></p>`;
+            }
+
+            document.getElementById('modal-player-name').innerText = p.name;
+            document.getElementById('modal-stats-body').innerHTML = bodyHtml;
+            document.getElementById('stats-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('stats-modal').style.display = 'none';
+        }
+
+        function closeModalOnBg(e) {
+            if (e.target.id === 'stats-modal') closeModal();
         }
 
         function init() {
