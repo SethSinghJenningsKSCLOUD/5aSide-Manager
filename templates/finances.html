@@ -5,17 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Finances & Attendance - Monday Night 5-a-Side</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
+        body { font-family: system-ui, sans-serif; max-width: 850px; margin: 40px auto; padding: 0 20px; line-height: 1.5; color: #212529; background: #fff; }
         .nav { margin-bottom: 20px; }
         .nav a { text-decoration: none; color: #0066cc; font-weight: bold; }
         .card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 25px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; font-size: 0.95rem; }
         th { background: #e9ecef; }
         .badge-core { background: #28a745; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; }
         .badge-ringer { background: #6c757d; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; }
         .badge-warning { background: #dc3545; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
-        button { background: #0066cc; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        button { background: #0066cc; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        button:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
@@ -26,10 +27,10 @@
     <h1>Attendance & Block Insights 📊</h1>
     <p>Total Matches Recorded: <strong>{{ total_matches }}</strong></p>
 
-    <!-- RINGER ANALYSIS -->
+    <!-- RINGER USAGE TRACKER -->
     <div class="card" style="border-left: 5px solid #ffc107;">
         <h2>Ringer Usage Tracker</h2>
-        <p><small>Ringers play for free to complete numbers. Keep an eye on frequent guests who should join the next quarterly block.</small></p>
+        <p style="margin-top: -5px; color: #6c757d;"><small>Ringers play to make up numbers. Frequent guests should be invited to join the next quarterly block.</small></p>
         
         <table>
             <thead>
@@ -38,6 +39,8 @@
                     <th>Status</th>
                     <th>Games Played</th>
                     <th>Turnout %</th>
+                    <th>MVPs ⭐</th>
+                    <th>Late Dropouts 💩</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -47,13 +50,21 @@
                     <td><strong>{{ p.name }}</strong></td>
                     <td>
                         {% if p.appearances >= 4 %}
-                            <span class="badge-warning">Frequent Guest ({{ p.appearances }} games)</span>
+                            <span class="badge-warning">Frequent Guest ({{ p.appearances }})</span>
                         {% else %}
                             <span class="badge-ringer">Casual Ringer</span>
                         {% endif %}
                     </td>
                     <td>{{ p.appearances }}</td>
                     <td>{{ p.turnout_pct }}%</td>
+                    <td><strong>{{ p.mvp_count }}</strong></td>
+                    <td>
+                        {% if p.late_flakes > 0 %}
+                            <span style="color: #dc3545; font-weight: bold;">{{ p.late_flakes }}</span>
+                        {% else %}
+                            0
+                        {% endif %}
+                    </td>
                     <td>
                         <form action="/toggle-core/{{ p.id }}" method="POST" style="margin: 0;">
                             <button type="submit">Promote to Core</button>
@@ -61,7 +72,7 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="5">No ringers recorded yet.</td></tr>
+                <tr><td colspan="7" style="text-align: center; color: #6c757d;">No ringers recorded yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -70,27 +81,44 @@
     <!-- CORE SUBSCRIBERS -->
     <div class="card" style="border-left: 5px solid #28a745;">
         <h2>Quarterly Block Members (Upfront Payers)</h2>
+        <p style="margin-top: -5px; color: #6c757d;"><small>Core players who hold guaranteed squad spots.</small></p>
+
         <table>
             <thead>
                 <tr>
                     <th>Player</th>
                     <th>Games Played</th>
                     <th>Turnout %</th>
+                    <th>MVPs ⭐</th>
+                    <th>Late Dropouts 💩</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for p in core_players %}
                 <tr>
-                    <td><strong>{{ p.name }}</strong> <span class="badge-core">Block Member</span></td>
+                    <td>
+                        <strong>{{ p.name }}</strong> 
+                        <span class="badge-core">Block Member</span>
+                    </td>
                     <td>{{ p.appearances }}</td>
                     <td>{{ p.turnout_pct }}%</td>
+                    <td><strong>{{ p.mvp_count }}</strong></td>
+                    <td>
+                        {% if p.late_flakes > 0 %}
+                            <span style="color: #dc3545; font-weight: bold;">{{ p.late_flakes }}</span>
+                        {% else %}
+                            0
+                        {% endif %}
+                    </td>
                     <td>
                         <form action="/toggle-core/{{ p.id }}" method="POST" style="margin: 0;">
                             <button type="submit" style="background: #6c757d;">Set as Ringer</button>
                         </form>
                     </td>
                 </tr>
+                {% else %}
+                <tr><td colspan="6" style="text-align: center; color: #6c757d;">No core members registered yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

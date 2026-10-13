@@ -173,6 +173,7 @@
                 else if (p.attn_streak >= 3) tagBadges += ' ⚡';
                 if (p.win_pct !== null && p.win_pct >= 70) tagBadges += ' 👑';
                 if (p.attn_pct !== null && p.attn_pct >= 75) tagBadges += ' 🛡️';
+                if (p.mvp_count > 0) tagBadges += ' ⭐';
 
                 if (p.win_streak >= 2) {
                     feedItems.push(`🔥 <strong>${p.name}</strong> has won ${p.win_streak} games on the bounce!`);
@@ -234,6 +235,7 @@
             if (p.attn_streak >= 3) details.push(`⚡ <strong>Attendance Streak:</strong> ${p.attn_streak} weeks in a row`);
             if (p.win_pct !== null && p.win_pct >= 70) details.push(`👑 <strong>Elite Win Rate:</strong> ${p.win_pct}% (${p.appearances} games)`);
             if (p.attn_pct !== null && p.attn_pct >= 75) details.push(`🛡️ <strong>Die-hard Attendance:</strong> ${p.attn_pct}% (${p.appearances} games)`);
+            if (p.mvp_count > 0) details.push(`⭐ <strong>Star Player Awards:</strong> ${p.mvp_count}x Match MVP`);
 
             let bodyHtml = '';
             if (details.length > 0) {

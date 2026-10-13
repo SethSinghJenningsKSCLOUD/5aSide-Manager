@@ -3,135 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monday Night 5-a-Side</title>
+    <title>Monday Night 5-a-Side Team Selector</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px; }
-        .player-card { border: 1px solid #ccc; padding: 10px; border-radius: 6px; display: block; cursor: pointer; }
-        .results { background: #f0f4f8; padding: 20px; border-radius: 8px; margin-top: 30px; border: 1px solid #d0d7de; }
-        .teams-container { display: flex; justify-content: space-between; gap: 20px; }
-        .team-box { flex: 1; background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e1e4e8; }
-        button { background: #0066cc; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
-        button:hover { background: #0052a3; }
-        .handicap-box { padding: 12px; background: #e9ecef; border-radius: 6px; margin: 15px 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 30px auto; padding: 0 20px; line-height: 1.5; background: #fdfdfd; color: #333; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        .player-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; user-select: none; background: white; }
+        .player-label:hover { background: #f0f0f0; }
+        .btn { background: #0066cc; color: white; border: none; padding: 10px 20px; font-size: 1rem; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background: #0052a3; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        .matchup-container { display: flex; gap: 20px; margin-top: 20px; }
+        .team-card { flex: 1; padding: 20px; border-radius: 8px; background: white; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .team-a { border-top: 4px solid #d9534f; }
+        .team-b { border-top: 4px solid #0275d8; }
+        ul { list-style-type: none; padding-left: 0; }
+        li { padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+        .score-form { background: #f4f6f8; border: 1px solid #dcdfe3; border-radius: 8px; padding: 20px; margin-top: 25px; }
+        .score-row { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
+        .score-input { width: 65px; padding: 8px; font-size: 1.2rem; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
-    <h1>Monday Night 5-a-Side</h1>
-    
-    <!-- 1. WEEKLY PLAYER SELECTION -->
-    <form action="/generate" method="POST">
-        <h3>Select Available Players for This Week:</h3>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>⚽ Team Selector & Dashboard</h2>
+        <div>
+            <a href="/rsvp" style="margin-right: 15px; font-weight: bold; text-decoration: none; color: #0066cc;">Public RSVP Page 📱</a>
+            <a href="/finances" style="font-weight: bold; text-decoration: none; color: #28a745;">Finances & Stats 📊</a>
+        </div>
+    </div>
+
+    {% if late_alerts %}
+    <div style="background: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <h4 style="margin: 0 0 5px 0;">⚠️ Late Dropout Alert!</h4>
+        {% for alert in late_alerts %}
+            <p style="margin: 2px 0;">
+                <strong>{{ alert.players.name }}</strong> dropped out 🔴 
+                <em>({{ alert.hours_before_match }} hrs before kickoff)</em>.
+            </p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/generate">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <p><strong>Available Players for {{ upcoming_date }}:</strong></p>
+            <button type="submit" formaction="/sync-attendance" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;">
+                💾 Sync RSVP Status & Dropouts
+            </button>
+        </div>
+
         <div class="grid">
             {% for player in players %}
-            <label class="player-card">
+            <label class="player-label">
                 <input type="checkbox" name="available_players" value="{{ player.id }}" {% if player.auto_select %}checked{% endif %}>
-                <strong>{{ player.name }}</strong><br>
-                <small>{% if player.is_core %}Core Member{% else %}Ringer{% endif %} | Elo: {{ player.elo_rating }}</small>
+                <span>{{ player.name }}</span>
             </label>
             {% endfor %}
         </div>
-        <button type="submit">Generate Balanced Teams</button>
+
+        <button type="submit" class="btn">Generate Balanced Teams ⚡</button>
     </form>
 
-    <!-- 2. GENERATED TEAMS, ROSTER ADJUSTMENTS & SCORE RECORDING -->
     {% if match_result %}
-    <div class="results">
-        <h2>Generated Matchup</h2>
-        <p><strong>Rating Difference:</strong> {{ match_result.diff }}</p>
+    <hr style="margin: 30px 0;">
+    <h3>Proposed Matchup</h3>
+    <div class="matchup-container">
+        <div class="team-card team-a">
+            <h4 style="margin-top: 0; color: #d9534f;">Team A (Avg: {{ match_result.team_a_rating }})</h4>
+            <ul>
+                {% for player in match_result.team_a %}
+                <li><span>{{ player }}</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="team-card team-b">
+            <h4 style="margin-top: 0; color: #0275d8;">Team B (Avg: {{ match_result.team_b_rating }})</h4>
+            <ul>
+                {% for player in match_result.team_b %}
+                <li><span>{{ player }}</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
 
-        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
-        
-        <h3>Record Match Result & Adjust Rosters</h3>
-        <form action="/record-score" method="POST">
-            
-            <!-- Team Assignments -->
-            <div class="teams-container" style="margin-bottom: 20px;">
-                <div class="team-box" id="team-a-box">
-                    <h3>Team A (Rating: {{ match_result.team_a_rating }})</h3>
-                    {% for player in players %}
-                    <label style="display: block; margin-bottom: 5px; cursor: pointer;">
-                        <input type="checkbox" name="team_a_ids" value="{{ player.id }}" 
-                            {% if player.name in match_result.team_a %}checked{% endif %}>
-                        {{ player.name }}
-                    </label>
-                    {% endfor %}
-                    <br>
-                    <label><strong>Team A Score:</strong> <input type="number" name="score_a" min="0" style="width: 60px; padding: 5px;"></label>
-                </div>
+    <!-- RECORD SCORE & MVP FORM -->
+    <div class="score-form">
+        <h4 style="margin-top:0;">Record Final Score & Awards</h4>
+        <form method="POST" action="/record-score">
+            {% for p_id in match_result.team_a_ids %}
+            <input type="hidden" name="team_a_ids" value="{{ p_id }}">
+            {% endfor %}
+            {% for p_id in match_result.team_b_ids %}
+            <input type="hidden" name="team_b_ids" value="{{ p_id }}">
+            {% endfor %}
 
-                <div class="team-box" id="team-b-box">
-                    <h3>Team B (Rating: {{ match_result.team_b_rating }})</h3>
-                    {% for player in players %}
-                    <label style="display: block; margin-bottom: 5px; cursor: pointer;">
-                        <input type="checkbox" name="team_b_ids" value="{{ player.id }}" 
-                            {% if player.name in match_result.team_b %}checked{% endif %}>
-                        {{ player.name }}
-                    </label>
-                    {% endfor %}
-                    <br>
-                    <label><strong>Team B Score:</strong> <input type="number" name="score_b" min="0" style="width: 60px; padding: 5px;"></label>
-                </div>
+            <div class="score-row">
+                <label>Team A:</label>
+                <input type="number" name="score_a" class="score-input" required min="0" value="0">
+                <span style="font-weight:bold;">vs</span>
+                <label>Team B:</label>
+                <input type="number" name="score_b" class="score-input" required min="0" value="0">
             </div>
 
-            <!-- WHATSAPP COPY BUTTON -->
-            <div style="text-align: center; margin: 20px 0;">
-                <button type="button" onclick="copyTeamSheet()" style="background: #25D366; color: white; border: none; padding: 12px 20px; font-size: 1rem; font-weight: bold; border-radius: 6px; cursor: pointer;">
-                    📋 Copy Team Sheet for WhatsApp
-                </button>
-                <span id="copy-msg" style="display: block; color: #28a745; margin-top: 8px; font-weight: bold;"></span>
-            </div>
-
-            <!-- Optional Handicap Box -->
-            <div class="handicap-box">
-                <h4 style="margin: 0 0 10px 0;">Handicap / Late Player Adjustment (Optional)</h4>
-                <label>Which team played short? 
-                    <select name="short_team" style="padding: 4px;">
-                        <option value="none">Neither (Equal numbers)</option>
-                        <option value="team_a">Team A played short</option>
-                        <option value="team_b">Team B played short</option>
+            <!-- MVP & TOP SCORER -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div>
+                    <label style="display:block; font-weight:600; margin-bottom:4px;">⭐ Star Player / MVP (+20 Elo):</label>
+                    <select name="mvp_id" style="width: 100%;">
+                        <option value="">-- None Selected --</option>
+                        {% for p in match_result.selected_players %}
+                        <option value="{{ p.id }}">{{ p.name }}</option>
+                        {% endfor %}
                     </select>
-                </label>
-                &nbsp;&nbsp;
-                <label>For how many minutes? 
-                    <input type="number" name="minutes_short" value="0" min="0" max="60" style="width: 60px; padding: 4px;">
-                </label>
+                </div>
+                <div>
+                    <label style="display:block; font-weight:600; margin-bottom:4px;">🎯 Top Scorer 5+ Goals (+10 Elo):</label>
+                    <select name="top_scorer_id" style="width: 100%;">
+                        <option value="">-- None Selected --</option>
+                        {% for p in match_result.selected_players %}
+                        <option value="{{ p.id }}">{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
 
-            <button type="submit" style="background: #28a745; margin-top: 10px;">Update Elo Ratings</button>
+            <div style="margin-bottom: 15px;">
+                <label>Handicap (Short team):</label>
+                <select name="short_team">
+                    <option value="none">Neither team short during play</option>
+                    <option value="A">Team A played short</option>
+                    <option value="B">Team B played short</option>
+                </select>
+                <input type="number" name="minutes_short" placeholder="Mins short" style="width: 80px; padding: 7px; margin-left: 8px;" min="0" max="60" value="0">
+            </div>
+
+            <button type="submit" class="btn" style="background:#28a745;">Save Match & Update Elo ✅</button>
         </form>
     </div>
     {% endif %}
 
-    <script>
-    function copyTeamSheet() {
-        // Find checked players in Team A box
-        let teamA = [];
-        document.querySelectorAll('#team-a-box input[name="team_a_ids"]:checked').forEach(el => {
-            teamA.push(el.parentElement.innerText.trim());
-        });
-        
-        // Find checked players in Team B box
-        let teamB = [];
-        document.querySelectorAll('#team-b-box input[name="team_b_ids"]:checked').forEach(el => {
-            teamB.push(el.parentElement.innerText.trim());
-        });
-
-        // Format sheet
-        let sheet = `⚽ *MONDAY NIGHT 5-A-SIDE* ⚽\n\n`;
-        sheet += `🔵 *TEAM A*\n`;
-        teamA.forEach(p => sheet += `• ${p}\n`);
-        sheet += `\n🔴 *TEAM B*\n`;
-        teamB.forEach(p => sheet += `• ${p}\n`);
-        sheet += `\nSee you on the pitch! 👟🔥`;
-
-        // Copy to clipboard
-        navigator.clipboard.writeText(sheet).then(() => {
-            let msg = document.getElementById('copy-msg');
-            msg.innerText = "Copied to clipboard! Ready to paste into WhatsApp.";
-            setTimeout(() => msg.innerText = "", 3000);
-        });
-    }
-    </script>
 </body>
 </html>

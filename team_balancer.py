@@ -1,77 +1,86 @@
-import itertools
+from itertools import combinations
+import math
 
-def generate_balanced_teams(players: dict, handicap: float = 1.20):
+
+def generate_balanced_teams(player_pool: dict):
+    """Generates two balanced teams.
+
+    If player count is odd (e.g. 5 v 6), the smaller team receives a 1.18x
+    effective strength multiplier to compensate for the numerical disadvantage.
     """
-    players: dict of {'Name': Elo_Rating}
-    handicap: boost applied to a 4-man team facing a 5-man team
-    """
-    names = list(players.keys())
-    total_players = len(names)
-    
+    player_names = list(player_pool.keys())
+    total_players = len(player_names)
+
     if total_players < 2:
         return None
 
-    # Calculate team sizes (5v5 for 10, 5v4 for 9)
-    size_a = (total_players + 1) // 2
-    size_b = total_players // 2
-    
-    best_diff = float('inf')
-    best_matchup = None
+    size_a = total_players // 2
+    size_b = total_players - size_a
+    is_uneven = size_a != size_b
 
-    for team_a in itertools.combinations(names, size_a):
-        team_b = [p for p in names if p not in team_a]
-        
-        sum_a = sum(players[p] for p in team_a)
-        sum_b = sum(players[p] for p in team_b)
-        
-        # Apply handicap if teams are 5 vs 4
-        if size_a != size_b:
-            effective_b = sum_b * handicap
-            diff = abs(sum_a - effective_b)
+    best_split = None
+    min_rating_diff = float("inf")
+
+    # Evaluate all unique team splits
+    for team_a_names in combinations(player_names, size_a):
+        team_a = list(team_a_names)
+        team_b = [p for p in player_names if p not in team_a]
+
+        rating_a = sum(player_pool[p] for p in team_a)
+        rating_b = sum(player_pool[p] for p in team_b)
+
+        if is_uneven:
+            # Team A is 5 players, Team B is 6 players.
+            # Team A must have ~18% higher cumulative quality to offset the physical extra man.
+            effective_rating_a = rating_a * 1.18
+            effective_rating_b = rating_b
+            diff = abs(effective_rating_a - effective_rating_b)
         else:
-            diff = abs(sum_a - sum_b)
-            
-        if diff < best_diff:
-            best_diff = diff
-            best_matchup = {
-                'team_a': list(team_a),
-                'team_a_rating': round(sum_a, 1),
-                'team_b': list(team_b),
-                'team_b_rating': round(sum_b, 1),
-                'diff': round(diff, 1)
-            }
-            
-    return best_matchup
+            diff = abs(rating_a - rating_b)
+
+        if diff < min_rating_diff:
+            min_rating_diff = diff
+            best_split = (team_a, team_b, rating_a, rating_b)
+
+    team_a, team_b, final_rating_a, final_rating_b = best_split
+
+    return {
+        "team_a": team_a,
+        "team_b": team_b,
+        "team_a_rating": round(final_rating_a / len(team_a)),
+        "team_b_rating": round(final_rating_b / len(team_b)),
+        "team_a_total": final_rating_a,
+        "team_b_total": final_rating_b,
+        "rating_diff": round(abs(final_rating_a - final_rating_b)),
+    }
+
+
 def update_elo_ratings(
-    team_a_players: list, 
-    team_b_players: list, 
-    score_a: int, 
-    score_b: int, 
-    short_team: str = "none",  # "none", "team_a", or "team_b"
+    team_a_players: list,
+    team_b_players: list,
+    score_a: int,
+    score_b: int,
+    short_team: str = "none",
     minutes_short: int = 0,
-    k_factor: int = 32
+    mvp_id: str = None,
+    top_scorer_id: str = None,
 ):
-    avg_a = sum(p['elo_rating'] for p in team_a_players) / len(team_a_players)
-    avg_b = sum(p['elo_rating'] for p in team_b_players) / len(team_b_players)
+    """Calculates updated Elo ratings based on outcome, goal margins,
 
-    # Base expected ratings
-    # 0.20 weight = playing 1 man down for 60 mins shifts expected win probability by 20%
-    handicap_weight = (minutes_short / 60.0) * 0.20
+    player-short handicaps, and individual performance bonuses.
+    """
+    avg_elo_a = sum(p["elo_rating"] for p in team_a_players) / len(
+        team_a_players
+    )
+    avg_elo_b = sum(p["elo_rating"] for p in team_b_players) / len(
+        team_b_players
+    )
 
-    if short_team == "team_a":
-        # Team A was short, so lower expectations for Team A (making a win/close loss worth more)
-        expected_a = 1 / (1 + 10 ** ((avg_b - avg_a) / 400)) - handicap_weight
-        expected_a = max(0.05, expected_a) # Prevent negative probabilities
-        expected_b = 1.0 - expected_a
-    elif short_team == "team_b":
-        expected_b = 1 / (1 + 10 ** ((avg_a - avg_b) / 400)) - handicap_weight
-        expected_b = max(0.05, expected_b)
-        expected_a = 1.0 - expected_b
-    else:
-        expected_a = 1 / (1 + 10 ** ((avg_b - avg_a) / 400))
-        expected_b = 1.0 - expected_a
+    # 1. Expected match outcome (Logistic curve)
+    expected_a = 1 / (1 + 10 ** ((avg_elo_b - avg_elo_a) / 400))
+    expected_b = 1 - expected_a
 
-    # Determine actual outcome
+    # 2. Actual outcome
     if score_a > score_b:
         actual_a, actual_b = 1.0, 0.0
     elif score_b > score_a:
@@ -79,11 +88,40 @@ def update_elo_ratings(
     else:
         actual_a, actual_b = 0.5, 0.5
 
-    # Calculate point updates
-    updates = {}
-    for p in team_a_players:
-        updates[p['id']] = round(p['elo_rating'] + k_factor * (actual_a - expected_a), 1)
-    for p in team_b_players:
-        updates[p['id']] = round(p['elo_rating'] + k_factor * (actual_b - expected_b), 1)
+    # 3. Goal Margin Multiplier (blowouts shift Elo faster than 1-goal wins)
+    goal_diff = abs(score_a - score_b)
+    margin_mult = (
+        math.log(goal_diff + 1, 2) if goal_diff > 1 else 1.0
+    )  # e.g., diff of 10 goals -> 3.45x
 
-    return updates
+    base_k = 30
+    delta_a = base_k * margin_mult * (actual_a - expected_a)
+    delta_b = base_k * margin_mult * (actual_b - expected_b)
+
+    # 4. Short-handed handicap adjustment during the game
+    if short_team == "A" and minutes_short > 0:
+        handicap = (minutes_short / 60) * 0.4
+        delta_a *= 1.0 - handicap if delta_a < 0 else 1.0 + handicap
+    elif short_team == "B" and minutes_short > 0:
+        handicap = (minutes_short / 60) * 0.4
+        delta_b *= 1.0 - handicap if delta_b < 0 else 1.0 + handicap
+
+    rating_updates = {}
+
+    for p in team_a_players:
+        new_rating = round(p["elo_rating"] + delta_a)
+        if p["id"] == mvp_id:
+            new_rating += 20  # +20 Elo MVP Bonus
+        if p["id"] == top_scorer_id:
+            new_rating += 10  # +10 Elo Goal Machine Bonus
+        rating_updates[p["id"]] = max(700, new_rating)
+
+    for p in team_b_players:
+        new_rating = round(p["elo_rating"] + delta_b)
+        if p["id"] == mvp_id:
+            new_rating += 20
+        if p["id"] == top_scorer_id:
+            new_rating += 10
+        rating_updates[p["id"]] = max(700, new_rating)
+
+    return rating_updates
