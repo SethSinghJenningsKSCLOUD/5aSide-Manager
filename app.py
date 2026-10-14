@@ -14,7 +14,6 @@ app.permanent_session_lifetime = timedelta(days=90)
 
 ADMIN_PIN = os.getenv("ADMIN_PIN", "0512")
 
-app = Flask(__name__)
 
 url: str = os.getenv("SUPABASE_URL")
 key: str = os.getenv("SUPABASE_KEY")
