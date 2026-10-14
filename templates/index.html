@@ -23,6 +23,55 @@
         .score-row { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
         .score-input { width: 65px; padding: 8px; font-size: 1.2rem; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
         select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        /* Floating Navigation Dock for Standalone Mobile */
+.app-nav-dock {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(33, 37, 41, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 30px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    z-index: 999;
+}
+
+.dock-btn {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 1.1rem;
+    padding: 6px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.dock-btn:active {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(0.92);
+}
+
+.dock-divider {
+    width: 1px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.3);
+    margin: 0 2px;
+}
+
+/* Ensure bottom content doesn't get obscured by the dock */
+body {
+    padding-bottom: 75px !important;
+}
     </style>
 </head>
 <body>
@@ -144,6 +193,20 @@
         </form>
     </div>
     {% endif %}
+
+    <!-- STANDALONE APP NAVIGATION DOCK -->
+<div class="app-nav-dock">
+    <button type="button" class="dock-btn" onclick="history.back()" title="Back">◀</button>
+    <button type="button" class="dock-btn" onclick="location.reload()" title="Refresh">🔄</button>
+    <button type="button" class="dock-btn" onclick="history.forward()" title="Forward">▶</button>
+    
+    <span class="dock-divider"></span>
+    
+    <!-- Quick Page Jump (Since there is no URL bar) -->
+    <a href="/" class="dock-btn" title="Team Selector">⚽</a>
+    <a href="/rsvp" class="dock-btn" title="RSVP">📱</a>
+    <a href="/finances" class="dock-btn" title="Stats & Finances">📊</a>
+</div>
 
 </body>
 </html>
