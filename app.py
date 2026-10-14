@@ -1,7 +1,8 @@
-from datetime import date, datetime, time, timedelta
 import os
+from datetime import date, datetime, time, timedelta
+from functools import wraps  # <--- ADD THIS LINE
 from dotenv import load_dotenv
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 from supabase import Client, create_client
 from team_balancer import generate_balanced_teams, update_elo_ratings
 
