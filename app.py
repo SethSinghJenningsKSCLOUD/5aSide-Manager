@@ -369,16 +369,38 @@ def submit_rsvp():
     upcoming_date = get_upcoming_monday()
 
     if player_id and status in ["IN", "OUT"]:
+        # 1. Fetch previous status and timestamp
         prev_resp = (
             supabase.table("availability")
-            .select("status")
+            .select("status, updated_at")
             .eq("player_id", str(player_id))
             .eq("match_date", str(upcoming_date))
             .execute()
         )
-        prev_status = prev_resp.data[0]["status"] if prev_resp.data else None
+        prev_row = prev_resp.data[0] if prev_resp.data else None
+        prev_status = prev_row.get("status") if prev_row else None
+        prev_updated_at = prev_row.get("updated_at") if prev_row else None
 
-        now_iso = datetime.now().isoformat()
+        now = datetime.now()
+        now_iso = now.isoformat()
+
+        # 2. Check 15-Minute Grace Period
+        is_grace_period = False
+        if prev_updated_at and prev_status == "IN":
+            try:
+                prev_time = datetime.fromisoformat(
+                    prev_updated_at.replace("Z", "+00:00")
+                )
+                now_cmp = (
+                    datetime.now(prev_time.tzinfo) if prev_time.tzinfo else now
+                )
+                minutes_elapsed = (now_cmp - prev_time).total_seconds() / 60
+                if minutes_elapsed <= 15:
+                    is_grace_period = True
+            except Exception as e:
+                print(f"Timestamp parse error: {e}")
+
+        # 3. Upsert current status
         supabase.table("availability").upsert(
             {
                 "player_id": str(player_id),
@@ -389,21 +411,23 @@ def submit_rsvp():
             on_conflict="player_id, match_date",
         ).execute()
 
-        if prev_status == "IN" and status == "OUT":
+        # 4. Flake Logging: Only flag if outside 15-min grace window
+        if prev_status == "IN" and status == "OUT" and not is_grace_period:
             match_datetime = datetime.combine(upcoming_date, time(19, 0))
-            hours_until = (
-                match_datetime - datetime.now()
-            ).total_seconds() / 3600
-            supabase.table("flake_logs").insert(
-                {
-                    "player_id": str(player_id),
-                    "match_date": str(upcoming_date),
-                    "hours_before_match": round(hours_until, 1),
-                    "is_late": hours_until <= 24,
-                }
-            ).execute()
+            hours_until = (match_datetime - now).total_seconds() / 3600
+            is_late = hours_until <= 24
 
-        # Auto-bump if roster exceeds 12
+            if is_late:
+                supabase.table("flake_logs").insert(
+                    {
+                        "player_id": str(player_id),
+                        "match_date": str(upcoming_date),
+                        "hours_before_match": round(hours_until, 1),
+                        "is_late": True,
+                    }
+                ).execute()
+
+        # 5. Auto-bump Logic (Cap at 12)
         if status == "IN":
             in_avail = (
                 supabase.table("availability")
