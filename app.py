@@ -8,6 +8,12 @@ from team_balancer import generate_balanced_teams, update_elo_ratings
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "fallback-secret-key-change-me")
+app.permanent_session_lifetime = timedelta(days=90)
+
+ADMIN_PIN = os.getenv("ADMIN_PIN", "0512")
+
+app = Flask(__name__)
 
 url: str = os.getenv("SUPABASE_URL")
 key: str = os.getenv("SUPABASE_KEY")
@@ -15,6 +21,37 @@ supabase: Client = create_client(url, key)
 
 ELO_MAP = {"1": 700, "2": 850, "3": 1000, "4": 1150, "5": 1300}
 
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect(url_for("admin_login", next=request.url))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+@app.route("/login", methods=["GET", "POST"])
+def admin_login():
+    next_url = request.args.get("next") or url_for("index")
+    error = None
+
+    if request.method == "POST":
+        entered_pin = request.form.get("pin", "").strip()
+        if entered_pin == ADMIN_PIN:
+            session.permanent = True
+            session["is_admin"] = True
+            return redirect(request.form.get("next") or url_for("index"))
+        else:
+            error = "Incorrect PIN. Try again."
+
+    return render_template("login.html", next_url=next_url, error=error)
+
+
+@app.route("/logout")
+def admin_logout():
+    session.pop("is_admin", None)
+    return redirect(url_for("rsvp_page"))
 
 def get_upcoming_monday():
     today = date.today()
@@ -175,6 +212,7 @@ def get_player_stats():
 
 
 @app.route("/")
+@admin_required
 def index():
     upcoming_date = get_upcoming_monday()
     response = supabase.table("players").select("*").order("name").execute()
@@ -215,6 +253,7 @@ def index():
 
 
 @app.route("/sync-attendance", methods=["POST"])
+@admin_required
 def sync_attendance():
     selected_ids = request.form.getlist("available_players")
     upcoming_date = get_upcoming_monday()
@@ -223,6 +262,7 @@ def sync_attendance():
 
 
 @app.route("/generate", methods=["POST"])
+@admin_required
 def generate():
     selected_ids = request.form.getlist("available_players")
     upcoming_date = get_upcoming_monday()
@@ -261,6 +301,7 @@ def generate():
 
 
 @app.route("/record-score", methods=["POST"])
+@admin_required
 def record_score():
     team_a_ids = request.form.getlist("team_a_ids")
     team_b_ids = request.form.getlist("team_b_ids")
@@ -491,6 +532,7 @@ def add_player_rsvp():
 
 
 @app.route("/finances")
+@admin_required
 def finances():
     players_res = (
         supabase.table("players").select("*").order("name").execute().data or []
@@ -556,6 +598,7 @@ def finances():
 
 
 @app.route("/toggle-core/<player_id>", methods=["POST"])
+@admin_required
 def toggle_core(player_id):
     p = (
         supabase.table("players")
