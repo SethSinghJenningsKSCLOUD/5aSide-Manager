@@ -309,8 +309,8 @@
             let details = [];
             if (p.win_streak >= 2) details.push(`🔥 <strong>Winning Streak:</strong> ${p.win_streak} games on the bounce`);
             if (p.attn_streak >= 3) details.push(`⚡ <strong>Attendance Streak:</strong> ${p.attn_streak} weeks in a row`);
-            if (p.win_pct !== null && p.win_pct >= 70) details.push(`👑 <strong>Elite Win Rate:</strong> ${p.win_pct}% (${p.appearances} games)`);
-            if (p.attn_pct !== null && p.attn_pct >= 75) details.push(`🛡️ <strong>Die-hard Attendance:</strong> ${p.attn_pct}% (${p.appearances} games)`);
+            if (p.win_pct !== null && p.win_pct >= 70) details.push(`👑 <strong>Elite Win Rate:</strong> ${p.win_pct}%`);
+            if (p.attn_pct !== null && p.attn_pct >= 75) details.push(`🛡️ <strong>Die-hard Attendance:</strong> ${p.attn_pct}%`);
             if (p.mvp_count > 0) details.push(`⭐ <strong>Star Player Awards:</strong> ${p.mvp_count}x Match MVP`);
 
             let bodyHtml = '';
@@ -319,10 +319,11 @@
                     details.map(d => `<li style="margin: 8px 0;">${d}</li>`).join('') +
                     '</ul>';
             } else {
-                bodyHtml = `<p style="color: #6c757d; margin: 15px 0; font-size: 0.9rem;">No active streaks or badges currently.<br><small>Total matches played: <strong>${p.appearances || 0}</strong></small></p>`;
+                bodyHtml = `<p style="color: #6c757d; margin: 15px 0; font-size: 0.9rem;">No active streaks or badges currently.</p>`;
             }
-            / Always display appearances regardless of whether badges exist
-    bodyHtml += `<div style="border-top: 1px solid #eee; margin-top: 12px; padding-top: 8px; font-size: 0.85rem; color: #6c757d;">Total matches played: <strong>${p.appearances || 0}</strong></div>`;
+
+            // Always display appearances cleanly
+            bodyHtml += `<div style="border-top: 1px solid #eee; margin-top: 12px; padding-top: 8px; font-size: 0.85rem; color: #6c757d;">Total matches played: <strong>${p.appearances || 0}</strong></div>`;
 
             document.getElementById('modal-player-name').innerText = p.name;
             document.getElementById('modal-stats-body').innerHTML = bodyHtml;
@@ -382,13 +383,14 @@
             const streakBox = document.getElementById('personal-streak-box');
             
             if (playerObj) {
+                let banners = [];
                 if (playerObj.win_streak >= 2) {
-                    streakBox.innerHTML = `<div class="streak-banner">🔥 Hot streak! You're on a <strong>${playerObj.win_streak} game winning streak</strong>!</div>`;
-                } else if (playerObj.attn_streak >= 3) {
-                    streakBox.innerHTML = `<div class="streak-banner">⚡ Great loyalty! You've played <strong>${playerObj.attn_streak} weeks in a row</strong>!</div>`;
-                } else {
-                    streakBox.innerHTML = '';
+                    banners.push(`<div class="streak-banner">🔥 Hot streak! You're on a <strong>${playerObj.win_streak} game winning streak</strong>!</div>`);
                 }
+                if (playerObj.attn_streak >= 3) {
+                    banners.push(`<div class="streak-banner">⚡ Great loyalty! You've played <strong>${playerObj.attn_streak} weeks in a row</strong>!</div>`);
+                }
+                streakBox.innerHTML = banners.join('');
             }
 
             const currentStatus = rsvps[id];
