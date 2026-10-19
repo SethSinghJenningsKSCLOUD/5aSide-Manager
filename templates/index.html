@@ -23,55 +23,56 @@
         .score-row { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
         .score-input { width: 65px; padding: 8px; font-size: 1.2rem; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
         select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        
         /* Floating Navigation Dock for Standalone Mobile */
-.app-nav-dock {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(33, 37, 41, 0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 14px;
-    border-radius: 30px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-    z-index: 999;
-}
+        .app-nav-dock {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(33, 37, 41, 0.92);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 30px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+            z-index: 999;
+        }
 
-.dock-btn {
-    background: transparent;
-    border: none;
-    color: #ffffff;
-    font-size: 1.1rem;
-    padding: 6px 10px;
-    border-radius: 20px;
-    cursor: pointer;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s ease, transform 0.1s ease;
-}
+        .dock-btn {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 1.1rem;
+            padding: 6px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease, transform 0.1s ease;
+        }
 
-.dock-btn:active {
-    background: rgba(255, 255, 255, 0.25);
-    transform: scale(0.92);
-}
+        .dock-btn:active {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(0.92);
+        }
 
-.dock-divider {
-    width: 1px;
-    height: 18px;
-    background: rgba(255, 255, 255, 0.3);
-    margin: 0 2px;
-}
+        .dock-divider {
+            width: 1px;
+            height: 18px;
+            background: rgba(255, 255, 255, 0.3);
+            margin: 0 2px;
+        }
 
-/* Ensure bottom content doesn't get obscured by the dock */
-body {
-    padding-bottom: 75px !important;
-}
+        /* Ensure bottom content doesn't get obscured by the dock */
+        body {
+            padding-bottom: 75px !important;
+        }
     </style>
 </head>
 <body>
@@ -93,6 +94,31 @@ body {
                 <em>({{ alert.hours_before_match }} hrs before kickoff)</em>.
             </p>
         {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ⭐ STAR PLAYER ADMIN CONFIRMATION CARD -->
+    {% if pending_mvp_poll %}
+    <div style="background: #eef2ff; border: 1px solid #c7d2fe; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <h4 style="margin: 0 0 8px 0; color: #3730a3;">⭐ Star Player Live Poll ({{ pending_mvp_poll.total_votes }} votes cast)</h4>
+        
+        {% if pending_mvp_poll.results %}
+            <form method="POST" action="/finalize-mvp" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="hidden" name="match_id" value="{{ pending_mvp_poll.match.id }}">
+                <select name="winner_id" style="padding: 8px; border-radius: 6px; border: 1px solid #a5b4fc; font-weight: bold;">
+                    {% for candidate in pending_mvp_poll.results %}
+                    <option value="{{ candidate.id }}">
+                        {{ candidate.name }} ({{ candidate.votes }} vote{{ 's' if candidate.votes > 1 else '' }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn" style="background: #4f46e5; padding: 8px 16px;">
+                    Confirm Winner & Award +20 Elo 🏆
+                </button>
+            </form>
+        {% else %}
+            <p style="margin: 0; color: #4338ca; font-size: 0.9rem;">No votes cast yet for the last match.</p>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -136,7 +162,7 @@ body {
                 {% endfor %}
             </ul>
         </div>
-    </div> <!-- Close matchup-container here -->
+    </div>
 
     <!-- WhatsApp Button sits cleanly centered below both cards -->
     <div style="margin: 20px 0; text-align: center;">
@@ -166,24 +192,32 @@ body {
             </div>
 
             <!-- MVP & TOP SCORER -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                <div>
-                    <label style="display:block; font-weight:600; margin-bottom:4px;">⭐ Star Player / MVP (+20 Elo):</label>
-                    <select name="mvp_id" style="width: 100%;">
+            <div style="margin-bottom: 20px;">
+                <!-- Single Select MVP -->
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; font-weight:600; margin-bottom:6px;">⭐ Star Player / MVP (+20 Elo):</label>
+                    <select name="mvp_id" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
                         <option value="">-- None Selected --</option>
                         {% for p in match_result.selected_players %}
                         <option value="{{ p.id }}">{{ p.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
+
+                <!-- Multi-Checkbox High Scorers -->
                 <div>
-                    <label style="display:block; font-weight:600; margin-bottom:4px;">🎯 Top Scorer 5+ Goals (+10 Elo):</label>
-                    <select name="top_scorer_id" style="width: 100%;">
-                        <option value="">-- None Selected --</option>
+                    <label style="display:block; font-weight:600; margin-bottom:6px;">
+                        🎯 High Scorers (5+ Goals) (+10 Elo each):
+                        <span style="font-weight: normal; font-size: 0.85rem; color: #6c757d;">(Select all that apply, or leave blank)</span>
+                    </label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; background: white; padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
                         {% for p in match_result.selected_players %}
-                        <option value="{{ p.id }}">{{ p.name }}</option>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; cursor: pointer; user-select: none;">
+                            <input type="checkbox" name="top_scorer_ids" value="{{ p.id }}">
+                            <span>{{ p.name }}</span>
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                 </div>
             </div>
 
@@ -203,20 +237,20 @@ body {
     {% endif %}
 
     <!-- STANDALONE APP NAVIGATION DOCK -->
-<div class="app-nav-dock">
-    <button type="button" class="dock-btn" onclick="history.back()" title="Back">◀</button>
-    <button type="button" class="dock-btn" onclick="location.reload()" title="Refresh">🔄</button>
-    <button type="button" class="dock-btn" onclick="history.forward()" title="Forward">▶</button>
-    
-    <span class="dock-divider"></span>
-    
-    <!-- Quick Page Jump (Since there is no URL bar) -->
-    <a href="/" class="dock-btn" title="Team Selector">⚽</a>
-    <a href="/rsvp" class="dock-btn" title="RSVP">📱</a>
-    <a href="/finances" class="dock-btn" title="Stats & Finances">📊</a>
-</div>
+    <div class="app-nav-dock">
+        <button type="button" class="dock-btn" onclick="history.back()" title="Back">◀</button>
+        <button type="button" class="dock-btn" onclick="location.reload()" title="Refresh">🔄</button>
+        <button type="button" class="dock-btn" onclick="history.forward()" title="Forward">▶</button>
+        
+        <span class="dock-divider"></span>
+        
+        <!-- Quick Page Jump (Since there is no URL bar) -->
+        <a href="/" class="dock-btn" title="Team Selector">⚽</a>
+        <a href="/rsvp" class="dock-btn" title="RSVP">📱</a>
+        <a href="/finances" class="dock-btn" title="Stats & Finances">📊</a>
+    </div>
 
-<script>
+    <script>
     function copyWhatsAppLineup() {
         const teamAItems = document.querySelectorAll('.team-a li span');
         const teamBItems = document.querySelectorAll('.team-b li span');
@@ -246,41 +280,5 @@ body {
         });
     }
     </script>
-</body>
-</html>
-
-<script>
-    function copyWhatsAppLineup() {
-        const teamAItems = document.querySelectorAll('.team-a li span');
-        const teamBItems = document.querySelectorAll('.team-b li span');
-
-        let text = `⚽ *Monday Night 5-a-Side Teams* ⚽\n\n`;
-        
-        text += `🎽 *TEAM A (Bibs)*\n`;
-        teamAItems.forEach(el => {
-            text += `• ${el.textContent.trim()}\n`;
-        });
-
-        text += `\n⚪ *TEAM B (No Bibs)*\n`;
-        teamBItems.forEach(el => {
-            text += `• ${el.textContent.trim()}\n`;
-        });
-
-        text += `\nSee everyone on the pitch! ⚡`;
-
-        navigator.clipboard.writeText(text).then(() => {
-            const notice = document.getElementById("copyNotice");
-            if (notice) {
-                notice.style.display = "block";
-                setTimeout(() => { notice.style.display = "none"; }, 3000);
-            }
-        }).catch(err => {
-            alert("Could not copy automatically. Please select and copy manually.");
-        });
-    }
-    </script>
-</body>
-</html>
-
 </body>
 </html>

@@ -311,7 +311,8 @@ def record_score():
     minutes_short = int(request.form.get("minutes_short", 0))
 
     mvp_id = request.form.get("mvp_id") or None
-    top_scorer_id = request.form.get("top_scorer_id") or None
+    # Change from .get() to .getlist() so it collects all checked boxes
+    top_scorer_ids = request.form.getlist("top_scorer_ids")
 
     if not team_a_ids or not team_b_ids:
         return redirect(url_for("index"))
@@ -331,7 +332,7 @@ def record_score():
         short_team=short_team,
         minutes_short=minutes_short,
         mvp_id=mvp_id,
-        top_scorer_id=top_scorer_id,
+        top_scorer_ids=top_scorer_ids,
     )
 
     for player_id, new_elo in rating_updates.items():
@@ -348,8 +349,7 @@ def record_score():
         "short_team": short_team,
         "minutes_short": minutes_short,
         "mvp_player_id": mvp_id,
-        "top_scorer_id": top_scorer_id,
-    }
+        "top_scorer_id": top_scorer_ids[0] if top_scorer_ids else None,    }
 
     match_res = (
         supabase.table("matches")
@@ -371,7 +371,6 @@ def record_score():
 
     supabase.table("match_attendance").insert(attendance_records).execute()
     return redirect(url_for("index"))
-
 
 @app.route("/rsvp", methods=["GET"])
 def rsvp_page():
@@ -398,10 +397,57 @@ def rsvp_page():
         p["mvp_count"] = p_stat.get("mvp_count", 0)
         p["is_recent_mvp"] = p_stat.get("is_recent_mvp", False)
 
-    return render_template(
-        "rsvp.html", players=players, rsvps=rsvps, match_date=upcoming_date
+    # 48-Hour Star Player Poll Window
+    recent_match_res = (
+        supabase.table("matches")
+        .select("*")
+        .eq("is_completed", True)
+        .order("match_date", desc=True)
+        .limit(1)
+        .execute()
     )
+    last_match = recent_match_res.data[0] if recent_match_res.data else None
+    active_poll_match = None
+    poll_hours_left = None
+    match_attendees = []
 
+    if last_match:
+        # Match kickoff assumed at 19:00 on match date
+        match_dt = datetime.combine(
+            date.fromisoformat(last_match["match_date"]), time(19, 0)
+        )
+        poll_deadline = match_dt + timedelta(hours=48)
+        now = datetime.now()
+
+        # Only activate the poll within the 48-hour window
+        if now < poll_deadline:
+            active_poll_match = last_match
+            poll_hours_left = max(
+                1, round((poll_deadline - now).total_seconds() / 3600)
+            )
+
+            att_res = (
+                supabase.table("match_attendance")
+                .select("player_id, players(id, name)")
+                .eq("match_id", active_poll_match["id"])
+                .execute()
+            )
+            match_attendees = [
+                {"id": row["players"]["id"], "name": row["players"]["name"]}
+                for row in (att_res.data or [])
+                if row.get("players")
+            ]
+            match_attendees.sort(key=lambda x: x["name"])
+
+    return render_template(
+        "rsvp.html",
+        players=players,
+        rsvps=rsvps,
+        match_date=upcoming_date,
+        active_poll_match=active_poll_match,
+        poll_hours_left=poll_hours_left,
+        match_attendees=match_attendees,
+    )
 
 @app.route("/rsvp", methods=["POST"])
 def submit_rsvp():
@@ -612,6 +658,49 @@ def toggle_core(player_id):
     ).execute()
     return redirect(url_for("finances"))
 
+
+@app.route("/vote-mvp", methods=["POST"])
+def vote_mvp():
+    match_id = request.form.get("match_id")
+    voter_id = request.form.get("voter_id")
+    voted_for_id = request.form.get("voted_for_id")
+    next_week_status = request.form.get("next_week_status")
+
+    if not match_id or not voter_id or not voted_for_id:
+        flash("Please select both your name and your vote.")
+        return redirect(url_for("rsvp_page"))
+
+    if voter_id == voted_for_id:
+        flash("You cannot vote for yourself! 😉")
+        return redirect(url_for("rsvp_page"))
+
+    # 1. Bank the Star Player vote
+    supabase.table("mvp_votes").upsert(
+        {
+            "match_id": match_id,
+            "voter_id": voter_id,
+            "voted_for_id": voted_for_id,
+        },
+        on_conflict="match_id, voter_id",
+    ).execute()
+
+    # 2. Early RSVP Hook: Auto-commit their availability for next Monday
+    if next_week_status in ["IN", "OUT"]:
+        upcoming_date = get_upcoming_monday()
+        supabase.table("availability").upsert(
+            {
+                "player_id": str(voter_id),
+                "match_date": str(upcoming_date),
+                "status": next_week_status,
+                "updated_at": datetime.now().isoformat(),
+            },
+            on_conflict="player_id, match_date",
+        ).execute()
+        flash("Vote cast & you're locked in for next week! ⭐⚽")
+    else:
+        flash("Vote recorded! ⭐")
+
+    return redirect(url_for("rsvp_page"))
 
 if __name__ == "__main__":
     app.run(debug=True)

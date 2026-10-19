@@ -63,18 +63,22 @@ def update_elo_ratings(
     short_team: str = "none",
     minutes_short: int = 0,
     mvp_id: str = None,
+    top_scorer_ids: list = None,
     top_scorer_id: str = None,
 ):
     """Calculates updated Elo ratings based on outcome, goal margins,
-
     player-short handicaps, and individual performance bonuses.
     """
-    avg_elo_a = sum(p["elo_rating"] for p in team_a_players) / len(
-        team_a_players
-    )
-    avg_elo_b = sum(p["elo_rating"] for p in team_b_players) / len(
-        team_b_players
-    )
+    # Normalise top_scorer_ids so it supports lists, single IDs, or None
+    if top_scorer_ids is None:
+        top_scorer_ids = [top_scorer_id] if top_scorer_id else []
+    elif isinstance(top_scorer_ids, str):
+        top_scorer_ids = [top_scorer_ids]
+
+    scorer_set = {str(pid) for pid in top_scorer_ids if pid}
+
+    avg_elo_a = sum(p["elo_rating"] for p in team_a_players) / len(team_a_players)
+    avg_elo_b = sum(p["elo_rating"] for p in team_b_players) / len(team_b_players)
 
     # 1. Expected match outcome (Logistic curve)
     expected_a = 1 / (1 + 10 ** ((avg_elo_b - avg_elo_a) / 400))
@@ -110,17 +114,17 @@ def update_elo_ratings(
 
     for p in team_a_players:
         new_rating = round(p["elo_rating"] + delta_a)
-        if p["id"] == mvp_id:
+        if mvp_id and str(p["id"]) == str(mvp_id):
             new_rating += 20  # +20 Elo MVP Bonus
-        if p["id"] == top_scorer_id:
+        if str(p["id"]) in scorer_set:
             new_rating += 10  # +10 Elo Goal Machine Bonus
         rating_updates[p["id"]] = max(700, new_rating)
 
     for p in team_b_players:
         new_rating = round(p["elo_rating"] + delta_b)
-        if p["id"] == mvp_id:
+        if mvp_id and str(p["id"]) == str(mvp_id):
             new_rating += 20
-        if p["id"] == top_scorer_id:
+        if str(p["id"]) in scorer_set:
             new_rating += 10
         rating_updates[p["id"]] = max(700, new_rating)
 
