@@ -136,6 +136,14 @@ body {
                 {% endfor %}
             </ul>
         </div>
+    </div> <!-- Close matchup-container here -->
+
+    <!-- WhatsApp Button sits cleanly centered below both cards -->
+    <div style="margin: 20px 0; text-align: center;">
+        <button type="button" id="copyBtn" onclick="copyWhatsAppLineup()" class="btn" style="background: #25D366; color: white; padding: 12px 24px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem;">
+            📋 Copy WhatsApp Lineup
+        </button>
+        <div id="copyNotice" style="display: none; color: #28a745; margin-top: 8px; font-weight: bold;">Copied to clipboard! ⚽</div>
     </div>
 
     <!-- RECORD SCORE & MVP FORM -->
@@ -207,6 +215,72 @@ body {
     <a href="/rsvp" class="dock-btn" title="RSVP">📱</a>
     <a href="/finances" class="dock-btn" title="Stats & Finances">📊</a>
 </div>
+
+<script>
+    function copyWhatsAppLineup() {
+        const teamAItems = document.querySelectorAll('.team-a li span');
+        const teamBItems = document.querySelectorAll('.team-b li span');
+
+        let text = `⚽ *Monday Night 5-a-Side Teams* ⚽\n\n`;
+        
+        text += `🎽 *TEAM A (Bibs)*\n`;
+        teamAItems.forEach(el => {
+            text += `• ${el.textContent.trim()}\n`;
+        });
+
+        text += `\n⚪ *TEAM B (No Bibs)*\n`;
+        teamBItems.forEach(el => {
+            text += `• ${el.textContent.trim()}\n`;
+        });
+
+        text += `\nSee everyone on the pitch! ⚡`;
+
+        navigator.clipboard.writeText(text).then(() => {
+            const notice = document.getElementById("copyNotice");
+            if (notice) {
+                notice.style.display = "block";
+                setTimeout(() => { notice.style.display = "none"; }, 3000);
+            }
+        }).catch(err => {
+            alert("Could not copy automatically. Please select and copy manually.");
+        });
+    }
+    </script>
+</body>
+</html>
+
+<script>
+    function copyWhatsAppLineup() {
+        const teamAItems = document.querySelectorAll('.team-a li span');
+        const teamBItems = document.querySelectorAll('.team-b li span');
+
+        let text = `⚽ *Monday Night 5-a-Side Teams* ⚽\n\n`;
+        
+        text += `🎽 *TEAM A (Bibs)*\n`;
+        teamAItems.forEach(el => {
+            text += `• ${el.textContent.trim()}\n`;
+        });
+
+        text += `\n⚪ *TEAM B (No Bibs)*\n`;
+        teamBItems.forEach(el => {
+            text += `• ${el.textContent.trim()}\n`;
+        });
+
+        text += `\nSee everyone on the pitch! ⚡`;
+
+        navigator.clipboard.writeText(text).then(() => {
+            const notice = document.getElementById("copyNotice");
+            if (notice) {
+                notice.style.display = "block";
+                setTimeout(() => { notice.style.display = "none"; }, 3000);
+            }
+        }).catch(err => {
+            alert("Could not copy automatically. Please select and copy manually.");
+        });
+    }
+    </script>
+</body>
+</html>
 
 </body>
 </html>
