@@ -243,12 +243,49 @@ def index():
     )
     late_alerts = late_flakes_resp.data or []
 
+    # Check for unfinalized Star Player votes from the last match
+    recent_match_res = (
+        supabase.table("matches")
+        .select("*")
+        .eq("is_completed", True)
+        .order("match_date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    last_completed = recent_match_res.data[0] if recent_match_res.data else None
+    pending_mvp_poll = None
+
+    if last_completed and not last_completed.get("mvp_player_id"):
+        votes_res = (
+            supabase.table("mvp_votes")
+            .select("voted_for_id, players:voted_for_id(name)")
+            .eq("match_id", last_completed["id"])
+            .execute()
+        )
+        tally = {}
+        for v in votes_res.data or []:
+            p_id = v["voted_for_id"]
+            p_name = v["players"]["name"] if v.get("players") else "Unknown"
+            if p_id not in tally:
+                tally[p_id] = {"id": p_id, "name": p_name, "votes": 0}
+            tally[p_id]["votes"] += 1
+
+        ranked_votes = sorted(
+            tally.values(), key=lambda x: x["votes"], reverse=True
+        )
+        pending_mvp_poll = {
+            "match": last_completed,
+            "results": ranked_votes,
+            "total_votes": len(votes_res.data or []),
+        }
+
     return render_template(
         "index.html",
         players=players,
         match_result=None,
         late_alerts=late_alerts,
         upcoming_date=upcoming_date,
+        pending_mvp_poll=pending_mvp_poll,
     )
 
 
@@ -411,6 +448,20 @@ def rsvp_page():
     poll_hours_left = None
     match_attendees = []
 
+   # 48-Hour Star Player Poll Window
+    recent_match_res = (
+        supabase.table("matches")
+        .select("*")
+        .eq("is_completed", True)
+        .order("match_date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    last_match = recent_match_res.data[0] if recent_match_res.data else None
+    active_poll_match = None
+    poll_hours_left = None
+    match_attendees = []
+
     if last_match:
         # Match kickoff assumed at 19:00 on match date
         match_dt = datetime.combine(
@@ -419,7 +470,7 @@ def rsvp_page():
         poll_deadline = match_dt + timedelta(hours=48)
         now = datetime.now()
 
-        # Only activate the poll within the 48-hour window
+        # Only activate the poll within the genuine 48-hour window
         if now < poll_deadline:
             active_poll_match = last_match
             poll_hours_left = max(
@@ -439,6 +490,15 @@ def rsvp_page():
             ]
             match_attendees.sort(key=lambda x: x["name"])
 
+    return render_template(
+        "rsvp.html",
+        players=players,
+        rsvps=rsvps,
+        match_date=upcoming_date,
+        active_poll_match=active_poll_match,
+        poll_hours_left=poll_hours_left,
+        match_attendees=match_attendees,
+    )
     return render_template(
         "rsvp.html",
         players=players,
@@ -701,6 +761,36 @@ def vote_mvp():
         flash("Vote recorded! ⭐")
 
     return redirect(url_for("rsvp_page"))
+
+@app.route("/finalize-mvp", methods=["POST"])
+@admin_required
+def finalize_mvp():
+    match_id = request.form.get("match_id")
+    winner_id = request.form.get("winner_id")
+
+    if not match_id or not winner_id:
+        return redirect(url_for("index"))
+
+    # 1. Update match record with the MVP winner
+    supabase.table("matches").update({"mvp_player_id": winner_id}).eq(
+        "id", match_id
+    ).execute()
+
+    # 2. Award +20 Elo to the winner
+    player_res = (
+        supabase.table("players")
+        .select("elo_rating")
+        .eq("id", winner_id)
+        .execute()
+    )
+    if player_res.data:
+        current_elo = player_res.data[0]["elo_rating"]
+        supabase.table("players").update({"elo_rating": current_elo + 20}).eq(
+            "id", winner_id
+        ).execute()
+
+    flash("Star Player crowned and +20 Elo awarded! 🏆")
+    return redirect(url_for("index"))
 
 if __name__ == "__main__":
     app.run(debug=True)
