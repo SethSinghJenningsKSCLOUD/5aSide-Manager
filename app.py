@@ -1,6 +1,6 @@
 import os
 from datetime import date, datetime, time, timedelta
-from functools import wraps
+from functools import wraps  # <--- ADD THIS LINE
 from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from supabase import Client, create_client
@@ -14,12 +14,12 @@ app.permanent_session_lifetime = timedelta(days=90)
 
 ADMIN_PIN = os.getenv("ADMIN_PIN", "0512")
 
+
 url: str = os.getenv("SUPABASE_URL")
 key: str = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
 ELO_MAP = {"1": 700, "2": 850, "3": 1000, "4": 1150, "5": 1300}
-
 
 def admin_required(f):
     @wraps(f)
@@ -53,7 +53,6 @@ def admin_logout():
     session.pop("is_admin", None)
     return redirect(url_for("rsvp_page"))
 
-
 def get_upcoming_monday():
     today = date.today()
     days_until_monday = (0 - today.weekday()) % 7
@@ -61,7 +60,10 @@ def get_upcoming_monday():
 
 
 def sync_admin_attendance(selected_ids: list, upcoming_date):
-    """Synchronizes admin selection with the availability table and logs late dropouts."""
+    """Synchronizes admin selection with the availability table and logs late
+
+    dropouts.
+    """
     avail_resp = (
         supabase.table("availability")
         .select("*")
@@ -208,7 +210,6 @@ def get_player_stats():
 
     return player_stats
 
-
 @app.route("/")
 @admin_required
 def index():
@@ -346,7 +347,6 @@ def index():
         pending_mvp_poll=pending_mvp_poll,
     )
 
-
 @app.route("/sync-attendance", methods=["POST"])
 @admin_required
 def sync_attendance():
@@ -400,7 +400,40 @@ def generate():
     supabase.table("match_attendance").insert(attendance_records).execute()
 
     return redirect(url_for("index"))
+    selected_ids = request.form.getlist("available_players")
+    upcoming_date = get_upcoming_monday()
 
+    if not selected_ids:
+        return redirect(url_for("index"))
+
+    # Sync manual admin selections to DB and log flakers
+    sync_admin_attendance(selected_ids, upcoming_date)
+
+    response = (
+        supabase.table("players").select("*").in_("id", selected_ids).execute()
+    )
+    selected_players = response.data
+
+    player_pool = {p["name"]: p["elo_rating"] for p in selected_players}
+    matchup = generate_balanced_teams(player_pool)
+
+    # Attach IDs for score logging
+    name_to_id = {p["name"]: p["id"] for p in selected_players}
+    matchup["team_a_ids"] = [name_to_id[name] for name in matchup["team_a"]]
+    matchup["team_b_ids"] = [name_to_id[name] for name in matchup["team_b"]]
+    matchup["selected_players"] = selected_players
+
+    all_players = (
+        supabase.table("players").select("*").order("name").execute().data
+    )
+
+    return render_template(
+        "index.html",
+        players=all_players,
+        match_result=matchup,
+        late_alerts=[],
+        upcoming_date=upcoming_date,
+    )
 
 @app.route("/reset-draft", methods=["POST"])
 @admin_required
@@ -419,7 +452,6 @@ def reset_draft():
         supabase.table("matches").delete().eq("id", mid).execute()
     flash("Teams reset. You can adjust selections and rebalance.")
     return redirect(url_for("index"))
-
 
 @app.route("/record-score", methods=["POST"])
 @admin_required
@@ -493,7 +525,6 @@ def record_score():
     flash("Match saved & Elo ratings updated! ⚽")
     return redirect(url_for("index"))
 
-
 @app.route("/finalize-mvp", methods=["POST"])
 @admin_required
 def finalize_mvp():
@@ -526,7 +557,6 @@ def finalize_mvp():
         flash(f"⭐ {winner['name']} confirmed as Star Player! +20 Elo awarded 🏆")
 
     return redirect(url_for("index"))
-
 
 @app.route("/rsvp", methods=["GET"])
 def rsvp_page():
@@ -567,13 +597,29 @@ def rsvp_page():
     poll_hours_left = None
     match_attendees = []
 
+   # 48-Hour Star Player Poll Window
+    recent_match_res = (
+        supabase.table("matches")
+        .select("*")
+        .eq("is_completed", True)
+        .order("match_date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    last_match = recent_match_res.data[0] if recent_match_res.data else None
+    active_poll_match = None
+    poll_hours_left = None
+    match_attendees = []
+
     if last_match:
+        # Match kickoff assumed at 19:00 on match date
         match_dt = datetime.combine(
             date.fromisoformat(last_match["match_date"]), time(19, 0)
         )
         poll_deadline = match_dt + timedelta(hours=48)
         now = datetime.now()
 
+        # Only activate the poll within the genuine 48-hour window
         if now < poll_deadline:
             active_poll_match = last_match
             poll_hours_left = max(
@@ -602,7 +648,15 @@ def rsvp_page():
         poll_hours_left=poll_hours_left,
         match_attendees=match_attendees,
     )
-
+    return render_template(
+        "rsvp.html",
+        players=players,
+        rsvps=rsvps,
+        match_date=upcoming_date,
+        active_poll_match=active_poll_match,
+        poll_hours_left=poll_hours_left,
+        match_attendees=match_attendees,
+    )
 
 @app.route("/rsvp", methods=["POST"])
 def submit_rsvp():
@@ -611,6 +665,7 @@ def submit_rsvp():
     upcoming_date = get_upcoming_monday()
 
     if player_id and status in ["IN", "OUT"]:
+        # 1. Fetch previous status and timestamp
         prev_resp = (
             supabase.table("availability")
             .select("status, updated_at")
@@ -625,7 +680,7 @@ def submit_rsvp():
         now = datetime.now()
         now_iso = now.isoformat()
 
-        # 15-Minute Grace Period
+        # 2. Check 15-Minute Grace Period
         is_grace_period = False
         if prev_updated_at and prev_status == "IN":
             try:
@@ -641,6 +696,7 @@ def submit_rsvp():
             except Exception as e:
                 print(f"Timestamp parse error: {e}")
 
+        # 3. Upsert current status
         supabase.table("availability").upsert(
             {
                 "player_id": str(player_id),
@@ -651,7 +707,7 @@ def submit_rsvp():
             on_conflict="player_id, match_date",
         ).execute()
 
-        # Flake Logging
+        # 4. Flake Logging: Only flag if outside 15-min grace window
         if prev_status == "IN" and status == "OUT" and not is_grace_period:
             match_datetime = datetime.combine(upcoming_date, time(19, 0))
             hours_until = (match_datetime - now).total_seconds() / 3600
@@ -667,7 +723,7 @@ def submit_rsvp():
                     }
                 ).execute()
 
-        # Auto-bump Logic (Cap at 12)
+        # 5. Auto-bump Logic (Cap at 12)
         if status == "IN":
             in_avail = (
                 supabase.table("availability")
@@ -763,6 +819,7 @@ def finances():
         p_id = record["player_id"]
         flake_counts[p_id] = flake_counts.get(p_id, 0) + 1
 
+    # Tally MVP totals
     mvp_counts = {}
     for m in matches_res:
         mid = m.get("mvp_player_id")
@@ -836,7 +893,7 @@ def vote_mvp():
         on_conflict="match_id, voter_id",
     ).execute()
 
-    # 2. Early RSVP Hook
+    # 2. Early RSVP Hook: Auto-commit their availability for next Monday
     if next_week_status in ["IN", "OUT"]:
         upcoming_date = get_upcoming_monday()
         supabase.table("availability").upsert(
@@ -848,12 +905,64 @@ def vote_mvp():
             },
             on_conflict="player_id, match_date",
         ).execute()
-        flash("Vote cast & locked in for next week! ⭐⚽")
+        flash("Vote cast & you're locked in for next week! ⭐⚽")
     else:
         flash("Vote recorded! ⭐")
 
     return redirect(url_for("rsvp_page"))
 
+@app.route("/finalize-mvp", methods=["POST"])
+@admin_required
+def finalize_mvp():
+    match_id = request.form.get("match_id")
+    winner_id = request.form.get("winner_id")
+
+    if not match_id or not winner_id:
+        return redirect(url_for("index"))
+
+    match_res = (
+        supabase.table("matches")
+        .select("mvp_player_id")
+        .eq("id", match_id)
+        .execute()
+    )
+    prev_mvp_id = (
+        match_res.data[0].get("mvp_player_id") if match_res.data else None
+    )
+
+    # If re-awarding to someone else, revert previous winner's +20 Elo
+    if prev_mvp_id and prev_mvp_id != winner_id:
+        prev_p = (
+            supabase.table("players")
+            .select("elo_rating")
+            .eq("id", prev_mvp_id)
+            .execute()
+        )
+        if prev_p.data:
+            supabase.table("players").update(
+                {"elo_rating": prev_p.data[0]["elo_rating"] - 20}
+            ).eq("id", prev_mvp_id).execute()
+
+    # Award +20 Elo to new winner (if not already awarded)
+    if prev_mvp_id != winner_id:
+        new_p = (
+            supabase.table("players")
+            .select("name, elo_rating")
+            .eq("id", winner_id)
+            .execute()
+        )
+        if new_p.data:
+            supabase.table("players").update(
+                {"elo_rating": new_p.data[0]["elo_rating"] + 20}
+            ).eq("id", winner_id).execute()
+            flash(
+                f"⭐ {new_p.data[0]['name']} confirmed as Star Player (+20 Elo)! 🏆"
+            )
+
+    supabase.table("matches").update({"mvp_player_id": winner_id}).eq(
+        "id", match_id
+    ).execute()
+    return redirect(url_for("index"))
 
 if __name__ == "__main__":
     app.run(debug=True)
