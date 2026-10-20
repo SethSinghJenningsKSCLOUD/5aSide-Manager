@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Match RSVP - Monday Night 5-a-Side</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 550px; margin: 20px auto; padding: 0 15px; line-height: 1.5; background: #f8f9fa; color: #212529; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 550px; margin: 20px auto; padding: 0 15px; line-height: 1.5; background: #f8f9fa; color: #212529; padding-bottom: 75px !important; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; margin-bottom: 20px; }
         .poll-card { background: #fffdf5; border: 2px solid #ffeeba; }
         .btn-group { display: flex; gap: 15px; margin-top: 15px; }
@@ -36,14 +36,12 @@
         .feed-list { text-align: left; margin: 10px 0; padding-left: 0; list-style: none; font-size: 0.9rem; }
         .feed-item { padding: 6px 0; border-bottom: 1px dashed #eee; color: #495057; }
         
-        /* Interactive Pop-up Modal */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-card { background: white; padding: 22px; border-radius: 14px; width: 85%; max-width: 330px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.15); animation: popIn 0.15s ease-out; }
         .modal-close-btn { margin-top: 15px; width: 100%; padding: 10px; background: #0066cc; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; }
 
-        /* Floating Navigation Dock for Standalone Mobile */
         .app-nav-dock {
             position: fixed;
             bottom: 20px;
@@ -87,30 +85,68 @@
             background: rgba(255, 255, 255, 0.3);
             margin: 0 2px;
         }
-
-        body {
-            padding-bottom: 75px !important;
-        }
     </style>
 </head>
 <body>
 
-    <!-- STAR PLAYER POLL (Only displays when active) -->
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; text-align: center;">
+            {% for message in messages %}
+                <div>{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- STAR PLAYER POLL (Active 48h Window) -->
     {% if active_poll_match %}
-    <div class="card poll-card">
+    <div class="card poll-card" id="poll-card-container">
         <h3 style="margin: 0 0 5px 0;">⭐ Star Player Vote</h3>
         <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #856404;">
             Vote for last match's standout player! (<strong>{{ poll_hours_left }}h left</strong>)
         </p>
-        <form action="/vote-mvp" method="POST">
+        <form action="/vote-mvp" method="POST" id="mvp-poll-form">
             <input type="hidden" name="match_id" value="{{ active_poll_match.id }}">
-            <select name="voted_player_id" required>
-                <option value="" disabled selected>-- Select Star Player --</option>
-                {% for att in match_attendees %}
-                <option value="{{ att.id }}">{{ att.name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-gold">Submit Vote ⭐</button>
+            <input type="hidden" name="voter_id" id="poll-voter-id">
+
+            <!-- Fallback voter dropdown if not recognized yet -->
+            <div id="voter-select-wrapper" style="text-align: left; margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">I am:</label>
+                <select id="poll-voter-select" onchange="onPollVoterChange(this.value)">
+                    <option value="" disabled selected>-- Select your name --</option>
+                    {% for p in players %}
+                    <option value="{{ p.id }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Recognized voter badge -->
+            <div id="voter-recognized-msg" style="display: none; font-size: 0.95rem; font-weight: bold; color: #495057; margin-bottom: 10px; text-align: left;">
+                Voting as: <span id="poll-voter-name" style="color: #0066cc;"></span>
+            </div>
+
+            <div style="text-align: left; margin-bottom: 10px;">
+                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">My Star Player is:</label>
+                <select name="voted_for_id" id="poll-candidate-select" required>
+                    <option value="" disabled selected>-- Select Star Player --</option>
+                    {% for att in match_attendees %}
+                    <option value="{{ att.id }}">{{ att.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="text-align: left; margin-bottom: 12px;">
+                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">Next Monday RSVP:</label>
+                <select name="next_week_status" style="margin-top: 4px;">
+                    <option value="IN" selected>🟢 Lock me IN for next Monday</option>
+                    <option value="OUT">🔴 I'm OUT for next Monday</option>
+                    <option value="">⏳ Just vote (I'll RSVP later)</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-gold">Cast Vote ⚡</button>
         </form>
     </div>
     {% endif %}
@@ -185,7 +221,7 @@
             <div id="ringer-needed-box"></div>
             <div class="tag-list" id="in-players-list"></div>
 
-            <!-- FORM & MILESTONE WRITTEN FEED -->
+            <!-- FORM & MILESTONE FEED -->
             <div id="milestone-feed-box" style="display: none;">
                 <ul class="feed-list" id="feed-list"></ul>
             </div>
@@ -202,7 +238,7 @@
         </div>
     </div>
 
-    <!-- PLAYER STATS MODAL POP-UP -->
+    <!-- PLAYER STATS MODAL -->
     <div id="stats-modal" class="modal-overlay" style="display: none;" onclick="closeModalOnBg(event)">
         <div class="modal-card">
             <h3 id="modal-player-name" style="margin-top: 0; margin-bottom: 5px;"></h3>
@@ -256,7 +292,6 @@
                 if (p.attn_streak >= 3) {
                     feedItems.push(`⚡ <strong>${p.name}</strong> has played ${p.attn_streak} weeks in a row!`);
                 }
-
                 if (p.win_pct !== null && p.win_pct >= 70) {
                     feedItems.push(`👑 <strong>${p.name}</strong> has an elite ${p.win_pct}% win rate (${p.appearances} games played).`);
                 }
@@ -322,7 +357,6 @@
                 bodyHtml = `<p style="color: #6c757d; margin: 15px 0; font-size: 0.9rem;">No active streaks or badges currently.</p>`;
             }
 
-            // Always display appearances cleanly
             bodyHtml += `<div style="border-top: 1px solid #eee; margin-top: 12px; padding-top: 8px; font-size: 0.85rem; color: #6c757d;">Total matches played: <strong>${p.appearances || 0}</strong></div>`;
 
             document.getElementById('modal-player-name').innerText = p.name;
@@ -336,6 +370,35 @@
 
         function closeModalOnBg(e) {
             if (e.target.id === 'stats-modal') closeModal();
+        }
+
+        function syncPollCard(id, name) {
+            const pollVoterId = document.getElementById('poll-voter-id');
+            const pollVoterName = document.getElementById('poll-voter-name');
+            const recognizedMsg = document.getElementById('voter-recognized-msg');
+            const selectWrapper = document.getElementById('voter-select-wrapper');
+            const candidateSelect = document.getElementById('poll-candidate-select');
+
+            if (pollVoterId && id) {
+                pollVoterId.value = id;
+                if (pollVoterName) pollVoterName.innerText = name;
+                if (recognizedMsg) recognizedMsg.style.display = 'block';
+                if (selectWrapper) selectWrapper.style.display = 'none';
+
+                if (candidateSelect) {
+                    Array.from(candidateSelect.options).forEach(opt => {
+                        opt.disabled = (opt.value === id);
+                    });
+                }
+            }
+        }
+
+        function onPollVoterChange(playerId) {
+            const p = players.find(player => player.id === playerId);
+            if (!p) return;
+            setStorage('5aside_player_id', p.id);
+            setStorage('5aside_player_name', p.name);
+            showRsvpScreen(p.id, p.name);
         }
 
         function init() {
@@ -378,6 +441,8 @@
             document.getElementById('rsvp-step').style.display = 'block';
             document.getElementById('welcome-msg').innerText = `Hey ${name}!`;
             document.getElementById('form-player-id').value = id;
+
+            syncPollCard(id, name);
 
             const playerObj = players.find(p => p.id === id);
             const streakBox = document.getElementById('personal-streak-box');
@@ -424,6 +489,20 @@
             document.getElementById('rsvp-step').style.display = 'none';
             document.getElementById('new-player-step').style.display = 'none';
             document.getElementById('select-step').style.display = 'block';
+
+            const pollVoterId = document.getElementById('poll-voter-id');
+            const recognizedMsg = document.getElementById('voter-recognized-msg');
+            const selectWrapper = document.getElementById('voter-select-wrapper');
+            const candidateSelect = document.getElementById('poll-candidate-select');
+
+            if (pollVoterId) pollVoterId.value = '';
+            if (recognizedMsg) recognizedMsg.style.display = 'none';
+            if (selectWrapper) selectWrapper.style.display = 'block';
+            if (candidateSelect) {
+                Array.from(candidateSelect.options).forEach(opt => {
+                    opt.disabled = false;
+                });
+            }
         }
 
         init();

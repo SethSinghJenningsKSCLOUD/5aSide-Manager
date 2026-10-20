@@ -827,18 +827,19 @@ def toggle_core(player_id):
 def vote_mvp():
     match_id = request.form.get("match_id")
     voter_id = request.form.get("voter_id")
-    voted_for_id = request.form.get("voted_for_id")
+    voted_for_id = request.form.get("voted_for_id") or request.form.get(
+        "voted_player_id"
+    )
     next_week_status = request.form.get("next_week_status")
 
     if not match_id or not voter_id or not voted_for_id:
-        flash("Please select both your name and your vote.")
+        flash("⚠️ Please select both your name and your Star Player vote.")
         return redirect(url_for("rsvp_page"))
 
-    if voter_id == voted_for_id:
+    if str(voter_id) == str(voted_for_id):
         flash("You cannot vote for yourself! 😉")
         return redirect(url_for("rsvp_page"))
 
-    # 1. Save or update the Star Player vote (no spaces in on_conflict)
     try:
         supabase.table("mvp_votes").upsert(
             {
@@ -853,7 +854,6 @@ def vote_mvp():
         flash(f"Vote could not be saved: {e}")
         return redirect(url_for("rsvp_page"))
 
-    # 2. Early RSVP Hook
     if next_week_status in ["IN", "OUT"]:
         upcoming_date = get_upcoming_monday()
         try:
@@ -866,15 +866,14 @@ def vote_mvp():
                 },
                 on_conflict="player_id,match_date",
             ).execute()
-            flash("Vote cast & locked in for next week! ⭐⚽")
+            flash("⭐ Vote cast & you're locked in for next week! ⚽")
         except Exception as e:
             print(f"Error saving RSVP: {e}")
-            flash("Vote cast! ⭐")
+            flash("Vote recorded! ⭐")
     else:
         flash("Vote recorded! ⭐")
 
     return redirect(url_for("rsvp_page"))
-
 
 if __name__ == "__main__":
     app.run(debug=True)
