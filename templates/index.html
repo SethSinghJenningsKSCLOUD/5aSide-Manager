@@ -92,30 +92,69 @@
         {% endif %}
     {% endwith %}
 
-    <!-- ⭐ STAR PLAYER CONFIRMATION BOX (Available if previous game has no MVP) -->
+    <!-- ⭐ STAR PLAYER CONFIRMATION & AMENDMENT BOX -->
     {% if pending_mvp_poll %}
-    <div style="background: #eef2ff; border: 1px solid #c7d2fe; padding: 16px; border-radius: 8px; margin-bottom: 25px;">
-        <h4 style="margin: 0 0 6px 0; color: #3730a3;">
-            ⭐ Award Star Player for Match ({{ pending_mvp_poll.match.match_date }})
-            <span style="font-size: 0.85rem; font-weight: normal; color: #4338ca;">— {{ pending_mvp_poll.total_votes }} votes cast</span>
-        </h4>
-        <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: #4b5563;">
-            Candidates are ordered by vote tally. You can confirm the poll leader or pick any attendee:
-        </p>
-        
-        <form method="POST" action="/finalize-mvp" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <input type="hidden" name="match_id" value="{{ pending_mvp_poll.match.id }}">
-            <select name="winner_id" required style="padding: 9px 12px; border-radius: 6px; border: 1px solid #a5b4fc; font-weight: bold; font-size: 0.95rem;">
-                {% for candidate in pending_mvp_poll.results %}
-                <option value="{{ candidate.id }}">
-                    {{ candidate.name }} ({{ candidate.votes }} vote{{ 's' if candidate.votes != 1 else '' }})
-                </option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn" style="background: #4f46e5; padding: 9px 18px;">
-                Confirm Star Player & Award +20 Elo 🏆
-            </button>
-        </form>
+    <div style="background: #eef2ff; border: 1px solid #c7d2fe; padding: 18px; border-radius: 10px; margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+            <h4 style="margin: 0; color: #3730a3; font-size: 1.05rem;">
+                ⭐ Star Player for Match ({{ pending_mvp_poll.match.match_date }})
+                <span style="font-size: 0.85rem; font-weight: normal; color: #4338ca;">— {{ pending_mvp_poll.total_votes }} votes cast</span>
+            </h4>
+            {% if pending_mvp_poll.current_mvp_name %}
+            <span style="background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 0.85rem;">
+                🏆 Crowned: {{ pending_mvp_poll.current_mvp_name }} (+20 Elo)
+            </span>
+            {% endif %}
+        </div>
+
+        {% if pending_mvp_poll.current_mvp_name %}
+            <!-- STATE: ALREADY AWARDED (Change or Clear) -->
+            <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: #4b5563;">
+                <strong>{{ pending_mvp_poll.current_mvp_name }}</strong> is currently recorded as Star Player. Need to amend or undo a misclick?
+            </p>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <form method="POST" action="/finalize-mvp" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;" onsubmit="return confirm('Change Star Player to the selected nominee? This will automatically subtract 20 Elo from the previous winner and award 20 Elo to the new one.');">
+                    <input type="hidden" name="match_id" value="{{ pending_mvp_poll.match.id }}">
+                    <select name="winner_id" required style="padding: 8px 12px; border-radius: 6px; border: 1px solid #a5b4fc; font-weight: 600;">
+                        {% for candidate in pending_mvp_poll.results %}
+                        <option value="{{ candidate.id }}" {% if candidate.id == pending_mvp_poll.current_mvp_id %}selected{% endif %}>
+                            {{ candidate.name }} ({{ candidate.votes }} vote{{ 's' if candidate.votes != 1 else '' }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn" style="background: #4f46e5; padding: 8px 14px; font-size: 0.9rem;">
+                        🔄 Amend Star Player
+                    </button>
+                </form>
+
+                <form method="POST" action="/finalize-mvp" onsubmit="return confirm('Remove Star Player award? This will deduct the 20 Elo and re-open the poll.');">
+                    <input type="hidden" name="match_id" value="{{ pending_mvp_poll.match.id }}">
+                    <input type="hidden" name="action" value="clear">
+                    <button type="submit" class="btn" style="background: #ef4444; padding: 8px 14px; font-size: 0.9rem;">
+                        ❌ Clear Award
+                    </button>
+                </form>
+            </div>
+        {% else %}
+            <!-- STATE: NOT AWARDED YET (Confirmation Guard) -->
+            <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: #4b5563;">
+                Candidates ordered by vote tally. Confirm the winner to award +20 Elo:
+            </p>
+            <form method="POST" action="/finalize-mvp" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;" onsubmit="return confirm('Confirm this player as Star Player? They will receive +20 Elo.');">
+                <input type="hidden" name="match_id" value="{{ pending_mvp_poll.match.id }}">
+                <select name="winner_id" required style="padding: 9px 12px; border-radius: 6px; border: 1px solid #a5b4fc; font-weight: bold; font-size: 0.95rem;">
+                    <option value="" disabled selected>-- Select Winner --</option>
+                    {% for candidate in pending_mvp_poll.results %}
+                    <option value="{{ candidate.id }}">
+                        {{ candidate.name }} ({{ candidate.votes }} vote{{ 's' if candidate.votes != 1 else '' }})
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn" style="background: #4f46e5; padding: 9px 18px;">
+                    Confirm Star Player & Award +20 Elo 🏆
+                </button>
+            </form>
+        {% endif %}
     </div>
     {% endif %}
 

@@ -283,7 +283,7 @@ def index():
                 "selected_players": team_a_players + team_b_players,
             }
 
-    # 2. Check for most recent completed match needing Star Player award
+   # 2. Check for most recent completed match for Star Player award / amendment
     recent_match_res = (
         supabase.table("matches")
         .select("*")
@@ -295,7 +295,7 @@ def index():
     last_completed = recent_match_res.data[0] if recent_match_res.data else None
     pending_mvp_poll = None
 
-    if last_completed and not last_completed.get("mvp_player_id"):
+    if last_completed:
         att_res = (
             supabase.table("match_attendance")
             .select("player_id, players(id, name)")
@@ -316,7 +316,10 @@ def index():
         )
         votes_list = votes_res.data or []
 
-        tally = {p["id"]: {"id": p["id"], "name": p["name"], "votes": 0} for p in attendees}
+        tally = {
+            p["id"]: {"id": p["id"], "name": p["name"], "votes": 0}
+            for p in attendees
+        }
         for v in votes_list:
             tgt = v.get("voted_for_id")
             if tgt in tally:
@@ -324,11 +327,21 @@ def index():
             elif tgt in player_map:
                 tally[tgt] = {"id": tgt, "name": player_map[tgt], "votes": 1}
 
-        ranked_candidates = sorted(tally.values(), key=lambda x: x["votes"], reverse=True)
+        ranked_candidates = sorted(
+            tally.values(), key=lambda x: x["votes"], reverse=True
+        )
+
+        current_mvp_id = last_completed.get("mvp_player_id")
+        current_mvp_name = (
+            player_map.get(current_mvp_id) if current_mvp_id else None
+        )
+
         pending_mvp_poll = {
             "match": last_completed,
             "results": ranked_candidates,
             "total_votes": len(votes_list),
+            "current_mvp_id": current_mvp_id,
+            "current_mvp_name": current_mvp_name,
         }
 
     return render_template(
@@ -492,8 +505,9 @@ def record_score():
 def finalize_mvp():
     match_id = request.form.get("match_id")
     winner_id = request.form.get("winner_id")
+    action = request.form.get("action")
 
-    if not match_id or not winner_id:
+    if not match_id:
         return redirect(url_for("index"))
 
     match_res = (
@@ -506,7 +520,32 @@ def finalize_mvp():
         match_res.data[0].get("mvp_player_id") if match_res.data else None
     )
 
-    # Revert previous winner's +20 Elo if changing
+    # Action 1: Clear the Star Player award completely
+    if action == "clear" or winner_id == "clear":
+        if prev_mvp_id:
+            prev_p = (
+                supabase.table("players")
+                .select("name, elo_rating")
+                .eq("id", prev_mvp_id)
+                .execute()
+            )
+            if prev_p.data:
+                supabase.table("players").update(
+                    {"elo_rating": prev_p.data[0]["elo_rating"] - 20}
+                ).eq("id", prev_mvp_id).execute()
+                flash(
+                    f"Star Player cleared. Deducted 20 Elo back from {prev_p.data[0]['name']}."
+                )
+
+        supabase.table("matches").update({"mvp_player_id": None}).eq(
+            "id", match_id
+        ).execute()
+        return redirect(url_for("index"))
+
+    if not winner_id:
+        return redirect(url_for("index"))
+
+    # Action 2: If re-awarding to someone else, revert previous winner's +20 Elo
     if prev_mvp_id and prev_mvp_id != winner_id:
         prev_p = (
             supabase.table("players")
@@ -519,6 +558,7 @@ def finalize_mvp():
                 {"elo_rating": prev_p.data[0]["elo_rating"] - 20}
             ).eq("id", prev_mvp_id).execute()
 
+    # Award +20 Elo to new winner (if not already awarded)
     if prev_mvp_id != winner_id:
         new_p = (
             supabase.table("players")
