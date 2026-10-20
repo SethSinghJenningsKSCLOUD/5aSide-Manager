@@ -838,6 +838,7 @@ def vote_mvp():
         flash("You cannot vote for yourself! 😉")
         return redirect(url_for("rsvp_page"))
 
+    # 1. Save or update the Star Player vote (no spaces in on_conflict)
     try:
         supabase.table("mvp_votes").upsert(
             {
@@ -848,22 +849,27 @@ def vote_mvp():
             on_conflict="match_id,voter_id",
         ).execute()
     except Exception as e:
-        print(f"Vote DB Error: {e}")
+        print(f"Error saving MVP vote: {e}")
         flash(f"Vote could not be saved: {e}")
         return redirect(url_for("rsvp_page"))
 
+    # 2. Early RSVP Hook
     if next_week_status in ["IN", "OUT"]:
         upcoming_date = get_upcoming_monday()
-        supabase.table("availability").upsert(
-            {
-                "player_id": str(voter_id),
-                "match_date": str(upcoming_date),
-                "status": next_week_status,
-                "updated_at": datetime.now().isoformat(),
-            },
-            on_conflict="player_id,match_date",
-        ).execute()
-        flash("Vote cast & locked in for next week! ⭐⚽")
+        try:
+            supabase.table("availability").upsert(
+                {
+                    "player_id": str(voter_id),
+                    "match_date": str(upcoming_date),
+                    "status": next_week_status,
+                    "updated_at": datetime.now().isoformat(),
+                },
+                on_conflict="player_id,match_date",
+            ).execute()
+            flash("Vote cast & locked in for next week! ⭐⚽")
+        except Exception as e:
+            print(f"Error saving RSVP: {e}")
+            flash("Vote cast! ⭐")
     else:
         flash("Vote recorded! ⭐")
 
