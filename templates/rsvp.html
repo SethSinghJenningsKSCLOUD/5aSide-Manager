@@ -107,13 +107,14 @@
         <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #856404;">
             Vote for last match's standout player! (<strong>{{ poll_hours_left }}h left</strong>)
         </p>
+
         <form action="/vote-mvp" method="POST" id="mvp-poll-form">
             <input type="hidden" name="match_id" value="{{ active_poll_match.id }}">
             <input type="hidden" name="voter_id" id="poll-voter-id">
 
-            <!-- Fallback voter dropdown if not recognized yet -->
+            <!-- Fallback if phone hasn't remembered player yet -->
             <div id="voter-select-wrapper" style="text-align: left; margin-bottom: 8px;">
-                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">I am:</label>
+                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">Who is voting?</label>
                 <select id="poll-voter-select" onchange="onPollVoterChange(this.value)">
                     <option value="" disabled selected>-- Select your name --</option>
                     {% for p in players %}
@@ -122,14 +123,15 @@
                 </select>
             </div>
 
-            <!-- Recognized voter badge -->
+            <!-- Recognized voter banner -->
             <div id="voter-recognized-msg" style="display: none; font-size: 0.95rem; font-weight: bold; color: #495057; margin-bottom: 10px; text-align: left;">
                 Voting as: <span id="poll-voter-name" style="color: #0066cc;"></span>
             </div>
 
-            <div style="text-align: left; margin-bottom: 10px;">
-                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">My Star Player is:</label>
-                <select name="voted_for_id" id="poll-candidate-select" required>
+            <!-- Standout Player Dropdown -->
+            <div style="text-align: left; margin-bottom: 12px;">
+                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">Star Player Nomination:</label>
+                <select name="voted_for_id" id="poll-candidate-select" required style="margin-top: 4px;">
                     <option value="" disabled selected>-- Select Star Player --</option>
                     {% for att in match_attendees %}
                     <option value="{{ att.id }}">{{ att.name }}</option>
@@ -137,16 +139,15 @@
                 </select>
             </div>
 
-            <div style="text-align: left; margin-bottom: 12px;">
-                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">Next Monday RSVP:</label>
-                <select name="next_week_status" style="margin-top: 4px;">
-                    <option value="IN" selected>🟢 Lock me IN for next Monday</option>
-                    <option value="OUT">🔴 I'm OUT for next Monday</option>
-                    <option value="">⏳ Just vote (I'll RSVP later)</option>
-                </select>
+            <!-- Dual Action Buttons: RSVP + Vote in One Click -->
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="submit" name="next_week_status" value="IN" class="btn btn-in" style="font-size: 0.95rem; padding: 12px 6px;">
+                    ⭐ Vote & I'm IN 🟢
+                </button>
+                <button type="submit" name="next_week_status" value="OUT" class="btn btn-out" style="font-size: 0.95rem; padding: 12px 6px;">
+                    ⭐ Vote & I'm OUT 🔴
+                </button>
             </div>
-
-            <button type="submit" class="btn btn-gold">Cast Vote ⚡</button>
         </form>
     </div>
     {% endif %}

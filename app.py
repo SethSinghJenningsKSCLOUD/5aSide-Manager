@@ -833,13 +833,19 @@ def vote_mvp():
     next_week_status = request.form.get("next_week_status")
 
     if not match_id or not voter_id or not voted_for_id:
-        flash("⚠️ Please select both your name and your Star Player vote.")
+        flash("⚠️ Please select your name and your Star Player nominee.")
         return redirect(url_for("rsvp_page"))
 
     if str(voter_id) == str(voted_for_id):
         flash("You cannot vote for yourself! 😉")
         return redirect(url_for("rsvp_page"))
 
+    # Strictly require attendance for next week
+    if next_week_status not in ["IN", "OUT"]:
+        flash("⚠️ Please let us know if you are IN or OUT for next week before voting!")
+        return redirect(url_for("rsvp_page"))
+
+    # 1. Record the vote
     try:
         supabase.table("mvp_votes").upsert(
             {
@@ -854,23 +860,21 @@ def vote_mvp():
         flash(f"Vote could not be saved: {e}")
         return redirect(url_for("rsvp_page"))
 
-    if next_week_status in ["IN", "OUT"]:
-        upcoming_date = get_upcoming_monday()
-        try:
-            supabase.table("availability").upsert(
-                {
-                    "player_id": str(voter_id),
-                    "match_date": str(upcoming_date),
-                    "status": next_week_status,
-                    "updated_at": datetime.now().isoformat(),
-                },
-                on_conflict="player_id,match_date",
-            ).execute()
-            flash("⭐ Vote cast & you're locked in for next week! ⚽")
-        except Exception as e:
-            print(f"Error saving RSVP: {e}")
-            flash("Vote recorded! ⭐")
-    else:
+    # 2. Lock in next week's RSVP
+    upcoming_date = get_upcoming_monday()
+    try:
+        supabase.table("availability").upsert(
+            {
+                "player_id": str(voter_id),
+                "match_date": str(upcoming_date),
+                "status": next_week_status,
+                "updated_at": datetime.now().isoformat(),
+            },
+            on_conflict="player_id,match_date",
+        ).execute()
+        flash(f"⭐ Vote cast & you're locked in as {next_week_status} for next Monday! ⚽")
+    except Exception as e:
+        print(f"Error saving RSVP: {e}")
         flash("Vote recorded! ⭐")
 
     return redirect(url_for("rsvp_page"))
