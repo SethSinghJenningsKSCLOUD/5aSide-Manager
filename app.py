@@ -430,73 +430,81 @@ def reset_draft():
 @app.route("/record-score", methods=["POST"])
 @admin_required
 def record_score():
-    team_a_ids = request.form.getlist("team_a_ids")
-    team_b_ids = request.form.getlist("team_b_ids")
+    match_date = request.form.get("match_date")
     score_a = int(request.form.get("score_a", 0))
     score_b = int(request.form.get("score_b", 0))
-    short_team = request.form.get("short_team", "none")
-    minutes_short = int(request.form.get("minutes_short", 0))
-
-    mvp_id = request.form.get("mvp_id") or None
+    team_a_ids = request.form.getlist("team_a_ids")
+    team_b_ids = request.form.getlist("team_b_ids")
     top_scorer_ids = request.form.getlist("top_scorer_ids")
+    is_casual = request.form.get("is_casual") == "true"
 
-    if not team_a_ids or not team_b_ids:
+    if not team_a_ids and not team_b_ids:
+        flash("Cannot record score: No players selected.")
         return redirect(url_for("index"))
 
-    res_a = (
-        supabase.table("players").select("*").in_("id", team_a_ids).execute()
-    )
-    res_b = (
-        supabase.table("players").select("*").in_("id", team_b_ids).execute()
-    )
-
-    rating_updates = update_elo_ratings(
-        res_a.data,
-        res_b.data,
-        score_a,
-        score_b,
-        short_team=short_team,
-        minutes_short=minutes_short,
-        mvp_id=mvp_id,
-        top_scorer_ids=top_scorer_ids,
-    )
-
-    for player_id, new_elo in rating_updates.items():
-        supabase.table("players").update({"elo_rating": new_elo}).eq(
-            "id", player_id
-        ).execute()
-
-    upcoming_date = get_upcoming_monday()
-    match_date = request.form.get("match_date") or str(upcoming_date)
-
-    match_data = {
-        "match_date": match_date,
-        "team_a_score": score_a,
-        "team_b_score": score_b,
-        "is_completed": True,
-        "short_team": short_team,
-        "minutes_short": minutes_short,
-        "mvp_player_id": mvp_id,
-        "top_scorer_id": top_scorer_ids[0] if top_scorer_ids else None,
-    }
-
+    # 1. Create or complete the match record
     match_res = (
         supabase.table("matches")
-        .upsert(match_data, on_conflict="match_date")
+        .insert(
+            {
+                "match_date": match_date,
+                "score_a": score_a,
+                "score_b": score_b,
+                "is_completed": True,
+            }
+        )
         .execute()
     )
     match_id = match_res.data[0]["id"]
 
-    supabase.table("match_attendance").delete().eq("match_id", match_id).execute()
-    attendance_records = [
-        {"match_id": match_id, "player_id": p_id, "team_assigned": "A"}
-        for p_id in team_a_ids
-    ] + [
-        {"match_id": match_id, "player_id": p_id, "team_assigned": "B"}
-        for p_id in team_b_ids
-    ]
-    supabase.table("match_attendance").insert(attendance_records).execute()
-    flash("Match saved & Elo ratings updated! ⚽")
+    # 2. Record attendance for all participating players
+    attendance_rows = []
+    for p_id in team_a_ids:
+        attendance_rows.append(
+            {
+                "match_id": match_id,
+                "player_id": p_id,
+                "team": "A",
+                "is_top_scorer": (p_id in top_scorer_ids and not is_casual),
+            }
+        )
+    for p_id in team_b_ids:
+        attendance_rows.append(
+            {
+                "match_id": match_id,
+                "player_id": p_id,
+                "team": "B",
+                "is_top_scorer": (p_id in top_scorer_ids and not is_casual),
+            }
+        )
+
+    supabase.table("match_attendance").insert(attendance_rows).execute()
+
+    # 3. Elo Calculations (skipped entirely if marked as casual)
+    if not is_casual:
+        short_team = request.form.get("short_team", "none")
+        minutes_short = int(request.form.get("minutes_short", 0))
+        # (Existing Elo update logic runs here)
+        update_match_elos(
+            team_a_ids, team_b_ids, score_a, score_b, short_team, minutes_short
+        )
+        for ts_id in top_scorer_ids:
+            p = (
+                supabase.table("players")
+                .select("elo_rating")
+                .eq("id", ts_id)
+                .execute()
+            )
+            if p.data:
+                supabase.table("players").update(
+                    {"elo_rating": p.data[0]["elo_rating"] + 10}
+                ).eq("id", ts_id).execute()
+        flash("Match score and Elo ratings successfully updated! ⚽")
+    else:
+        flash("Casual kickabout recorded! Attendance and streaks updated (Elo unchanged). ⚡")
+
+    # Clear draft session if one was stored
+    session.pop("draft_match", None)
     return redirect(url_for("index"))
 
 
