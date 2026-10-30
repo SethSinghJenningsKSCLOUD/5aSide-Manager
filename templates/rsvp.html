@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Match RSVP - Monday Night 5-a-Side</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 550px; margin: 20px auto; padding: 0 15px; line-height: 1.5; background: #f8f9fa; color: #212529; padding-bottom: 75px !important; }
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 550px; margin: 20px auto; padding: 0 15px; line-height: 1.5; background: #f8f9fa; color: #212529; padding-bottom: 85px !important; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; margin-bottom: 20px; }
         .poll-card { background: #fffdf5; border: 2px solid #ffeeba; }
         .btn-group { display: flex; gap: 15px; margin-top: 15px; }
-        .btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: white; }
+        .btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: white; transition: transform 0.1s ease; }
+        .btn:active { transform: scale(0.98); }
         .btn-in { background: #28a745; }
         .btn-out { background: #dc3545; }
-        .btn-gold { background: #e0a800; color: #212529; width: 100%; margin-top: 10px; }
         .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
         .player-btn { padding: 12px; border: 1px solid #ced4da; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
         .player-btn:hover { background: #e9ecef; }
@@ -22,7 +23,7 @@
         .status-OUT { background: #f8d7da; color: #721c24; }
         .switch-link { margin-top: 20px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
         
-        .streak-banner { background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.95rem; font-weight: 600; }
+        .streak-banner { background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.95rem; font-weight: 600; text-align: left; }
         .roster-section { text-align: left; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
         .roster-header { font-size: 1rem; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px; }
@@ -40,14 +41,15 @@
         .modal-card { background: white; padding: 22px; border-radius: 14px; width: 85%; max-width: 330px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.15); animation: popIn 0.15s ease-out; }
         .modal-close-btn { margin-top: 15px; width: 100%; padding: 10px; background: #0066cc; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; }
 
+        /* FULL APP NAV DOCK */
         .app-nav-dock {
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(33, 37, 41, 0.92);
+            background: rgba(33, 37, 41, 0.94);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             display: flex;
@@ -222,7 +224,7 @@
             <div id="ringer-needed-box"></div>
             <div class="tag-list" id="in-players-list"></div>
 
-            <!-- FORM & MILESTONE FEED -->
+            <!-- CONSOLIDATED MILESTONE FEED -->
             <div id="milestone-feed-box" style="display: none;">
                 <ul class="feed-list" id="feed-list"></ul>
             </div>
@@ -287,17 +289,28 @@
                 if (p.attn_pct !== null && p.attn_pct >= 75) tagBadges += ' 🛡️';
                 if (p.mvp_count > 0) tagBadges += ' ⭐';
 
+                // Consolidate badges & achievements onto one single line per player
+                let badges = '';
+                let details = [];
                 if (p.win_streak >= 2) {
-                    feedItems.push(`🔥 <strong>${p.name}</strong> has won ${p.win_streak} games on the bounce!`);
-                } 
+                    badges += '🔥 ';
+                    details.push(`won ${p.win_streak} games in a row`);
+                }
                 if (p.attn_streak >= 3) {
-                    feedItems.push(`⚡ <strong>${p.name}</strong> has played ${p.attn_streak} weeks in a row!`);
+                    badges += '⚡ ';
+                    details.push(`played ${p.attn_streak} weeks on the bounce`);
                 }
                 if (p.win_pct !== null && p.win_pct >= 70) {
-                    feedItems.push(`👑 <strong>${p.name}</strong> has an elite ${p.win_pct}% win rate (${p.appearances} games played).`);
+                    badges += '👑 ';
+                    details.push(`${p.win_pct}% win rate`);
                 }
                 if (p.attn_pct !== null && p.attn_pct >= 75) {
-                    feedItems.push(`🛡️ <strong>${p.name}</strong> is a core die-hard (${p.attn_pct}% attendance across ${p.appearances} games).`);
+                    badges += '🛡️ ';
+                    details.push(`${p.attn_pct}% loyalty`);
+                }
+
+                if (details.length > 0) {
+                    feedItems.push(`${badges.trim()} <strong>${p.name}</strong>: ${details.join(' & ')}.`);
                 }
 
                 const tagHtml = `<span class="tag ${status === 'IN' ? 'tag-in' : status === 'OUT' ? 'tag-out' : 'tag-pending'}" onclick="showPlayerStatsModal('${p.id}')">${p.name}${tagBadges}</span>`;
@@ -509,11 +522,15 @@
         init();
     </script>
     
-    <!-- PUBLIC RSVP NAV DOCK -->
+    <!-- FULL NAV DOCK (RSVP PAGE) -->
     <div class="app-nav-dock">
         <button type="button" class="dock-btn" onclick="history.back()" title="Back">◀</button>
         <button type="button" class="dock-btn" onclick="location.reload()" title="Refresh">🔄</button>
         <button type="button" class="dock-btn" onclick="history.forward()" title="Forward">▶</button>
+        <span class="dock-divider"></span>
+        <a href="/" class="dock-btn" title="Team Selector">⚽</a>
+        <a href="/rsvp" class="dock-btn" title="RSVP">📱</a>
+        <a href="/finances" class="dock-btn" title="Stats & Finances">📊</a>
     </div>
 </body>
 </html>
