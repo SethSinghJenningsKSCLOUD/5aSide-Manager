@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monday Night 5-a-Side Team Selector</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 30px auto; padding: 0 20px; line-height: 1.5; background: #fdfdfd; color: #333; padding-bottom: 75px !important; }
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 30px auto; padding: 0 16px; line-height: 1.5; background: #fdfdfd; color: #333; padding-bottom: 85px !important; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 20px; }
         .player-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; user-select: none; background: white; }
         .player-label:hover { background: #f0f0f0; }
@@ -15,23 +16,33 @@
         .btn-secondary:hover { background: #5a6268; }
         .btn-danger { background: #dc3545; }
         .btn-danger:hover { background: #bd2130; }
-        .matchup-container { display: flex; gap: 20px; margin-top: 15px; }
-        .team-card { flex: 1; padding: 20px; border-radius: 8px; background: white; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        
+        /* Matchup & Draggable Cards */
+        .matchup-container { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 15px; }
+        .team-card { flex: 1 1 280px; min-width: 0; padding: 16px; border-radius: 8px; background: white; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.15s ease, border-color 0.15s ease; }
+        .team-card.drag-over { border: 2px dashed #0066cc; background: #f0f7ff; }
         .team-a { border-top: 4px solid #d9534f; }
         .team-b { border-top: 4px solid #0275d8; }
-        ul { list-style-type: none; padding-left: 0; }
-        li { padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
-        .score-form { background: #f4f6f8; border: 1px solid #dcdfe3; border-radius: 8px; padding: 20px; margin-top: 25px; }
-        .score-row { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
+        
+        ul { list-style-type: none; padding-left: 0; margin: 0; min-height: 80px; }
+        .player-item { padding: 8px 10px; margin-bottom: 6px; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff; cursor: grab; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+        .player-item:active { cursor: grabbing; background: #eef2ff; }
+        .btn-swap { padding: 3px 8px; font-size: 0.75rem; border-radius: 4px; }
+
+        /* Score Form & Responsive Container */
+        .score-form { background: #f4f6f8; border: 1px solid #dcdfe3; border-radius: 8px; padding: 16px; margin-top: 20px; width: 100%; }
+        .score-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; margin-bottom: 15px; }
+        .score-unit { display: inline-flex; align-items: center; gap: 8px; }
         .score-input { width: 65px; padding: 8px; font-size: 1.2rem; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
         select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
-        
+
+        /* Floating Nav Dock */
         .app-nav-dock {
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(33, 37, 41, 0.92);
+            background: rgba(33, 37, 41, 0.94);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             display: flex;
@@ -73,8 +84,8 @@
 </head>
 <body>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2>⚽ Team Selector & Dashboard</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+        <h2 style="margin: 0;">⚽ Team Selector & Dashboard</h2>
         <div>
             <a href="/rsvp" style="margin-right: 15px; font-weight: bold; text-decoration: none; color: #0066cc;">Public RSVP Page 📱</a>
             <a href="/finances" style="font-weight: bold; text-decoration: none; color: #28a745;">Finances & Stats 📊</a>
@@ -108,7 +119,6 @@
         </div>
 
         {% if pending_mvp_poll.current_mvp_name %}
-            <!-- STATE: ALREADY AWARDED (Change or Clear) -->
             <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: #4b5563;">
                 <strong>{{ pending_mvp_poll.current_mvp_name }}</strong> is currently recorded as Star Player. Need to amend or undo a misclick?
             </p>
@@ -136,7 +146,6 @@
                 </form>
             </div>
         {% else %}
-            <!-- STATE: NOT AWARDED YET (Confirmation Guard) -->
             <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: #4b5563;">
                 Candidates ordered by vote tally. Confirm the winner to award +20 Elo:
             </p>
@@ -158,6 +167,7 @@
     </div>
     {% endif %}
 
+    <!-- LATE DROPOUT ALERT -->
     {% if late_alerts %}
     <div style="background: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
         <h4 style="margin: 0 0 5px 0;">⚠️ Late Dropout Alert!</h4>
@@ -172,7 +182,7 @@
 
     <!-- PERSISTED ACTIVE MATCHUP SECTION -->
     {% if match_result %}
-    <div style="background: #f8fafc; border: 2px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 30px;">
+    <div style="background: #f8fafc; border: 2px solid #3b82f6; border-radius: 10px; padding: 18px; margin-bottom: 30px; overflow: hidden;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <h3 style="margin: 0; color: #1e3a8a;">⚡ Current Active Matchup</h3>
             <form method="POST" action="/reset-draft" onsubmit="return confirm('Reset these teams and pick again?');" style="margin: 0;">
@@ -181,21 +191,32 @@
                 </button>
             </form>
         </div>
+        <p style="margin: 6px 0 14px 0; font-size: 0.85rem; color: #64748b;">
+            💡 <em>Tip: <strong>Drag and drop</strong> players between boxes, or use the ⇄ buttons to swap teams.</em>
+        </p>
 
+        <!-- DRAGGABLE MATCHUP CONTAINER -->
         <div class="matchup-container">
-            <div class="team-card team-a">
-                <h4 style="margin-top: 0; color: #d9534f;">Team A (Avg: {{ match_result.team_a_rating }})</h4>
-                <ul>
-                    {% for player in match_result.team_a %}
-                    <li><span>{{ player }}</span></li>
+            <div class="team-card team-a" id="card-team-A" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, 'A')">
+                <h4 style="margin-top: 0; color: #d9534f;" id="team-a-header">Team A (<span id="count-a">{{ match_result.team_a | length }}</span> players)</h4>
+                <ul id="team-a-list">
+                    {% for p in match_result.selected_players if p.id in match_result.team_a_ids %}
+                    <li id="player-row-{{ p.id }}" class="player-item" draggable="true" ondragstart="onDragStart(event, '{{ p.id }}')">
+                        <span class="player-name-text">☰ {{ p.name }}</span>
+                        <button type="button" onclick="movePlayer('{{ p.id }}', 'B')" class="btn btn-secondary btn-swap">⇄ to B</button>
+                    </li>
                     {% endfor %}
                 </ul>
             </div>
-            <div class="team-card team-b">
-                <h4 style="margin-top: 0; color: #0275d8;">Team B (Avg: {{ match_result.team_b_rating }})</h4>
-                <ul>
-                    {% for player in match_result.team_b %}
-                    <li><span>{{ player }}</span></li>
+            
+            <div class="team-card team-b" id="card-team-B" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, 'B')">
+                <h4 style="margin-top: 0; color: #0275d8;" id="team-b-header">Team B (<span id="count-b">{{ match_result.team_b | length }}</span> players)</h4>
+                <ul id="team-b-list">
+                    {% for p in match_result.selected_players if p.id in match_result.team_b_ids %}
+                    <li id="player-row-{{ p.id }}" class="player-item" draggable="true" ondragstart="onDragStart(event, '{{ p.id }}')">
+                        <span class="player-name-text">☰ {{ p.name }}</span>
+                        <button type="button" onclick="movePlayer('{{ p.id }}', 'A')" class="btn btn-secondary btn-swap">⇄ to A</button>
+                    </li>
                     {% endfor %}
                 </ul>
             </div>
@@ -211,71 +232,153 @@
         <!-- RECORD SCORE FORM -->
         <div class="score-form">
             <h4 style="margin-top:0;">Record Final Score & Awards</h4>
-            <form method="POST" action="/record-score">
+            <form method="POST" action="/record-score" id="record-score-form">
                 <input type="hidden" name="match_date" value="{{ match_result.match_date }}">
-                {% for p_id in match_result.team_a_ids %}
-                <input type="hidden" name="team_a_ids" value="{{ p_id }}">
-                {% endfor %}
-                {% for p_id in match_result.team_b_ids %}
-                <input type="hidden" name="team_b_ids" value="{{ p_id }}">
-                {% endfor %}
-
-                <div class="score-row">
-                    <label>Team A:</label>
-                    <input type="number" name="score_a" class="score-input" required min="0" value="0">
-                    <span style="font-weight:bold;">vs</span>
-                    <label>Team B:</label>
-                    <input type="number" name="score_b" class="score-input" required min="0" value="0">
+                
+                <!-- Dynamic hidden inputs kept in sync by movePlayer() -->
+                <div id="team-a-inputs">
+                    {% for p_id in match_result.team_a_ids %}
+                    <input type="hidden" name="team_a_ids" value="{{ p_id }}" id="input-a-{{ p_id }}">
+                    {% endfor %}
+                </div>
+                <div id="team-b-inputs">
+                    {% for p_id in match_result.team_b_ids %}
+                    <input type="hidden" name="team_b_ids" value="{{ p_id }}" id="input-b-{{ p_id }}">
+                    {% endfor %}
                 </div>
 
-                <div style="margin-bottom: 20px;">
-                    <!-- Star Player Dropdown (optional immediate pick) -->
-                    <div style="margin-bottom: 15px;">
-                        <label style="display:block; font-weight:600; margin-bottom:6px;">⭐ Star Player / MVP (+20 Elo):</label>
-                        <select name="mvp_id" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc;">
-                            <option value="">-- Leave empty to decide via 48h player poll --</option>
-                            {% for p in match_result.selected_players %}
-                            <option value="{{ p.id }}">{{ p.name }}</option>
-                            {% endfor %}
-                        </select>
+                <!-- RESPONSIVE NON-OVERFLOWING SCORE ROW -->
+                <div class="score-row">
+                    <div class="score-unit">
+                        <label style="font-weight: bold; color: #d9534f;">Team A:</label>
+                        <input type="number" name="score_a" class="score-input" required min="0" value="0">
                     </div>
+                    <span style="font-weight: bold; color: #64748b;">vs</span>
+                    <div class="score-unit">
+                        <label style="font-weight: bold; color: #0275d8;">Team B:</label>
+                        <input type="number" name="score_b" class="score-input" required min="0" value="0">
+                    </div>
+                </div>
 
+                <!-- Casual Kickabout Toggle -->
+                <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 10px 14px; border-radius: 6px; margin-bottom: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; color: #856404;">
+                        <input type="checkbox" name="is_casual" value="true" onchange="toggleCasualMode(this.checked)">
+                        <span>Casual Kickabout / Low Turnout (Record attendance & streaks only — NO Elo changes)</span>
+                    </label>
+                </div>
+
+                <div id="competitive-options">
                     <!-- Multi-Checkbox High Scorers -->
-                    <div>
+                    <div style="margin-bottom: 15px;">
                         <label style="display:block; font-weight:600; margin-bottom:6px;">
                             🎯 High Scorers (5+ Goals) (+10 Elo each):
                         </label>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; background: white; padding: 12px; border: 1px solid #ddd; border-radius: 6px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; background: white; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
                             {% for p in match_result.selected_players %}
-                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; cursor: pointer; user-select: none;">
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9rem; cursor: pointer; user-select: none;">
                                 <input type="checkbox" name="top_scorer_ids" value="{{ p.id }}">
                                 <span>{{ p.name }}</span>
                             </label>
                             {% endfor %}
                         </div>
                     </div>
+
+                    <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                        <label style="font-weight: 600;">Handicap:</label>
+                        <select name="short_team">
+                            <option value="none">Neither team short during play</option>
+                            <option value="A">Team A played short</option>
+                            <option value="B">Team B played short</option>
+                        </select>
+                        <input type="number" name="minutes_short" placeholder="Mins" style="width: 70px; padding: 7px;" min="0" max="60" value="0">
+                    </div>
                 </div>
 
-                <div style="margin-bottom: 15px;">
-                    <label>Handicap (Short team):</label>
-                    <select name="short_team">
-                        <option value="none">Neither team short during play</option>
-                        <option value="A">Team A played short</option>
-                        <option value="B">Team B played short</option>
-                    </select>
-                    <input type="number" name="minutes_short" placeholder="Mins short" style="width: 80px; padding: 7px; margin-left: 8px;" min="0" max="60" value="0">
-                </div>
-
-                <button type="submit" class="btn" style="background:#28a745;">Save Match & Update Elo ✅</button>
+                <button type="submit" class="btn" style="background:#28a745; width: 100%;">Save Match & Attendance ✅</button>
             </form>
         </div>
     </div>
+
+    <script>
+    // Drag and Drop Handlers
+    function onDragStart(e, playerId) {
+        e.dataTransfer.setData('text/plain', playerId);
+    }
+    function onDragOver(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+    function onDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+    function onDrop(e, targetTeam) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        const playerId = e.dataTransfer.getData('text/plain');
+        if (playerId) {
+            movePlayer(playerId, targetTeam);
+        }
+    }
+
+    function movePlayer(playerId, targetTeam) {
+        const row = document.getElementById(`player-row-${playerId}`);
+        if (!row) return;
+
+        const currentList = row.closest('ul');
+        if (targetTeam === 'A' && currentList && currentList.id === 'team-a-list') return;
+        if (targetTeam === 'B' && currentList && currentList.id === 'team-b-list') return;
+
+        const spanEl = row.querySelector('.player-name-text') || row.querySelector('span');
+        const rawName = spanEl ? spanEl.innerText.replace(/^☰\s*/, '').trim() : '';
+
+        const listA = document.getElementById('team-a-list');
+        const listB = document.getElementById('team-b-list');
+        const inputsA = document.getElementById('team-a-inputs');
+        const inputsB = document.getElementById('team-b-inputs');
+
+        row.remove();
+        const oldInputA = document.getElementById(`input-a-${playerId}`);
+        const oldInputB = document.getElementById(`input-b-${playerId}`);
+        if (oldInputA) oldInputA.remove();
+        if (oldInputB) oldInputB.remove();
+
+        if (targetTeam === 'A') {
+            listA.insertAdjacentHTML('beforeend', `
+                <li id="player-row-${playerId}" class="player-item" draggable="true" ondragstart="onDragStart(event, '${playerId}')">
+                    <span class="player-name-text">☰ ${rawName}</span>
+                    <button type="button" onclick="movePlayer('${playerId}', 'B')" class="btn btn-secondary btn-swap">⇄ to B</button>
+                </li>
+            `);
+            inputsA.insertAdjacentHTML('beforeend', `<input type="hidden" name="team_a_ids" value="${playerId}" id="input-a-${playerId}">`);
+        } else {
+            listB.insertAdjacentHTML('beforeend', `
+                <li id="player-row-${playerId}" class="player-item" draggable="true" ondragstart="onDragStart(event, '${playerId}')">
+                    <span class="player-name-text">☰ ${rawName}</span>
+                    <button type="button" onclick="movePlayer('${playerId}', 'A')" class="btn btn-secondary btn-swap">⇄ to A</button>
+                </li>
+            `);
+            inputsB.insertAdjacentHTML('beforeend', `<input type="hidden" name="team_b_ids" value="${playerId}" id="input-b-${playerId}">`);
+        }
+
+        document.getElementById('count-a').innerText = listA.children.length;
+        document.getElementById('count-b').innerText = listB.children.length;
+    }
+
+    function toggleCasualMode(isCasual) {
+        const compDiv = document.getElementById('competitive-options');
+        if (compDiv) {
+            compDiv.style.opacity = isCasual ? '0.4' : '1';
+            compDiv.style.pointerEvents = isCasual ? 'none' : 'auto';
+        }
+    }
+    </script>
     {% endif %}
 
     <!-- PLAYER CHECKLIST & TEAM GENERATOR -->
     <form method="POST" action="/generate">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <p><strong>Available Players for {{ upcoming_date }}:</strong></p>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <p style="margin: 10px 0;"><strong>Available Players for {{ upcoming_date }}:</strong></p>
             <button type="submit" formaction="/sync-attendance" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;">
                 💾 Sync RSVP Status & Dropouts
             </button>
@@ -290,7 +393,7 @@
             {% endfor %}
         </div>
 
-        <button type="submit" class="btn">Generate Balanced Teams ⚡</button>
+        <button type="submit" class="btn" style="width: 100%; padding: 14px; font-size: 1.05rem;">Generate Balanced Teams ⚡</button>
     </form>
 
     <!-- FLOATING DOCK -->
@@ -306,15 +409,15 @@
 
     <script>
     function copyWhatsAppLineup() {
-        const teamAItems = document.querySelectorAll('.team-a li span');
-        const teamBItems = document.querySelectorAll('.team-b li span');
+        const teamAItems = document.querySelectorAll('#team-a-list .player-name-text');
+        const teamBItems = document.querySelectorAll('#team-b-list .player-name-text');
 
         let text = `⚽ *Monday Night 5-a-Side Teams* ⚽\n\n`;
         text += `🎽 *TEAM A (Bibs)*\n`;
-        teamAItems.forEach(el => { text += `• ${el.textContent.trim()}\n`; });
+        teamAItems.forEach(el => { text += `• ${el.textContent.replace(/^☰\s*/, '').trim()}\n`; });
 
         text += `\n⚪ *TEAM B (No Bibs)*\n`;
-        teamBItems.forEach(el => { text += `• ${el.textContent.trim()}\n`; });
+        teamBItems.forEach(el => { text += `• ${el.textContent.replace(/^☰\s*/, '').trim()}\n`; });
         text += `\nSee everyone on the pitch! ⚡`;
 
         navigator.clipboard.writeText(text).then(() => {
