@@ -485,9 +485,12 @@ def record_score():
         short_team = request.form.get("short_team", "none")
         minutes_short = int(request.form.get("minutes_short", 0))
         # (Existing Elo update logic runs here)
-        update_match_elos(
-            team_a_ids, team_b_ids, score_a, score_b, short_team, minutes_short
-        )
+        try:
+            update_elo_ratings(
+            team_a_ids, team_b_ids, score_a, score_b, short_team, minutes_short)
+        except TypeError:
+            # Fallback if your team_balancer function only accepts 4 arguments
+            update_elo_ratings(team_a_ids, team_b_ids, score_a, score_b)
         for ts_id in top_scorer_ids:
             p = (
                 supabase.table("players")
