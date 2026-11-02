@@ -162,27 +162,48 @@ def get_player_stats():
 
             if p_att:
                 appearances += 1
-                team = p_att["team_assigned"]
-                score_a = m.get("team_a_score", 0)
-                score_b = m.get("team_b_score", 0)
-                won = (team == "A" and score_a > score_b) or (
-                    team == "B" and score_b > score_a
-                )
-
-                if won:
-                    wins += 1
-
                 if attn_streak_active:
                     attn_streak += 1
 
-                if win_streak_active:
+                # Check both team_assigned (new) and team (legacy)
+                team = (
+                    p_att.get("team_assigned") or p_att.get("team") or ""
+                ).strip().upper()
+
+                # Safely handle None / NULL values without crashing
+                raw_a = (
+                    m.get("team_a_score")
+                    if m.get("team_a_score") is not None
+                    else m.get("score_a")
+                )
+                raw_b = (
+                    m.get("team_b_score")
+                    if m.get("team_b_score") is not None
+                    else m.get("score_b")
+                )
+                score_a = int(raw_a) if raw_a is not None else 0
+                score_b = int(raw_b) if raw_b is not None else 0
+
+                # Decisive competitive match
+                if team in ["A", "B"] and score_a != score_b:
+                    won = (team == "A" and score_a > score_b) or (
+                        team == "B" and score_b > score_a
+                    )
                     if won:
-                        win_streak += 1
-                    else:
+                        wins += 1
+                    if win_streak_active:
+                        if won:
+                            win_streak += 1
+                        else:
+                            win_streak_active = False
+                elif score_a == score_b and (score_a > 0 or score_b > 0):
+                    # Competitive draw ends streak
+                    if win_streak_active:
                         win_streak_active = False
+                # Un-scored kickabouts (0-0) are skipped
             else:
+                # Absent: resets attendance streak, preserves win streak
                 attn_streak_active = False
-                win_streak_active = False
 
         win_pct = (
             round((wins / appearances) * 100, 1) if appearances >= 10 else None
