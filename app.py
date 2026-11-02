@@ -451,85 +451,97 @@ def reset_draft():
 @app.route("/record-score", methods=["POST"])
 @admin_required
 def record_score():
-    match_date = request.form.get("match_date")
-    score_a = int(request.form.get("score_a", 0))
-    score_b = int(request.form.get("score_b", 0))
-    team_a_ids = request.form.getlist("team_a_ids")
-    team_b_ids = request.form.getlist("team_b_ids")
-    top_scorer_ids = request.form.getlist("top_scorer_ids")
-    is_casual = request.form.get("is_casual") == "true"
+    try:
+        match_date = request.form.get("match_date") or str(get_upcoming_monday())
+        
+        # Safely parse scores (handles blank inputs without crashing)
+        raw_a = request.form.get("score_a")
+        raw_b = request.form.get("score_b")
+        score_a = int(raw_a) if raw_a and raw_a.strip().isdigit() else 0
+        score_b = int(raw_b) if raw_b and raw_b.strip().isdigit() else 0
 
-    if not team_a_ids and not team_b_ids:
-        flash("Cannot record score: No players selected.")
+        team_a_ids = request.form.getlist("team_a_ids")
+        team_b_ids = request.form.getlist("team_b_ids")
+        top_scorer_ids = request.form.getlist("top_scorer_ids")
+        is_casual = request.form.get("is_casual") == "true"
+
+        if not team_a_ids and not team_b_ids:
+            flash("⚠️ Cannot record score: No players selected.")
+            return redirect(url_for("index"))
+
+        # 1. Update the match record to completed (correct column names)
+        match_data = {
+            "match_date": match_date,
+            "team_a_score": score_a,
+            "team_b_score": score_b,
+            "is_completed": True,
+        }
+        match_res = (
+            supabase.table("matches")
+            .upsert(match_data, on_conflict="match_date")
+            .execute()
+        )
+        if not match_res.data:
+            flash("⚠️ Database error: Match could not be saved.")
+            return redirect(url_for("index"))
+
+        match_id = match_res.data[0]["id"]
+
+        # 2. Record attendance with correct column name (team_assigned)
+        supabase.table("match_attendance").delete().eq("match_id", match_id).execute()
+        attendance_rows = []
+        for p_id in team_a_ids:
+            attendance_rows.append({
+                "match_id": match_id,
+                "player_id": p_id,
+                "team_assigned": "A",
+            })
+        for p_id in team_b_ids:
+            attendance_rows.append({
+                "match_id": match_id,
+                "player_id": p_id,
+                "team_assigned": "B",
+            })
+
+        if attendance_rows:
+            supabase.table("match_attendance").insert(attendance_rows).execute()
+
+        # 3. Elo Calculations (skipped for casual matches)
+        if not is_casual:
+            short_team = request.form.get("short_team", "none")
+            raw_mins = request.form.get("minutes_short")
+            minutes_short = int(raw_mins) if raw_mins and raw_mins.strip().isdigit() else 0
+            
+            try:
+                update_elo_ratings(team_a_ids, team_b_ids, score_a, score_b, short_team, minutes_short)
+            except Exception as elo_err:
+                print(f"6-arg update_elo_ratings failed: {elo_err}. Falling back to 4 args...")
+                try:
+                    update_elo_ratings(team_a_ids, team_b_ids, score_a, score_b)
+                except Exception as elo_err2:
+                    print(f"4-arg update_elo_ratings failed: {elo_err2}")
+
+            # Top Scorers bonus (+10 Elo)
+            for ts_id in top_scorer_ids:
+                try:
+                    p = supabase.table("players").select("elo_rating").eq("id", ts_id).execute()
+                    if p.data:
+                        curr_elo = p.data[0].get("elo_rating") or 1000
+                        supabase.table("players").update({"elo_rating": curr_elo + 10}).eq("id", ts_id).execute()
+                except Exception as ts_err:
+                    print(f"Error updating top scorer {ts_id}: {ts_err}")
+
+            flash("Match score and Elo ratings successfully saved! ⚽")
+        else:
+            flash("Casual kickabout recorded! Attendance and streaks updated (Elo unchanged). ⚡")
+
+        session.pop("draft_match", None)
         return redirect(url_for("index"))
 
-    # 1. Create or complete the match record
-    match_res = (
-        supabase.table("matches")
-        .insert(
-            {
-                "match_date": match_date,
-                "score_a": score_a,
-                "score_b": score_b,
-                "is_completed": True,
-            }
-        )
-        .execute()
-    )
-    match_id = match_res.data[0]["id"]
-
-    # 2. Record attendance for all participating players
-    attendance_rows = []
-    for p_id in team_a_ids:
-        attendance_rows.append(
-            {
-                "match_id": match_id,
-                "player_id": p_id,
-                "team": "A",
-                "is_top_scorer": (p_id in top_scorer_ids and not is_casual),
-            }
-        )
-    for p_id in team_b_ids:
-        attendance_rows.append(
-            {
-                "match_id": match_id,
-                "player_id": p_id,
-                "team": "B",
-                "is_top_scorer": (p_id in top_scorer_ids and not is_casual),
-            }
-        )
-
-    supabase.table("match_attendance").insert(attendance_rows).execute()
-
-    # 3. Elo Calculations (skipped entirely if marked as casual)
-    if not is_casual:
-        short_team = request.form.get("short_team", "none")
-        minutes_short = int(request.form.get("minutes_short", 0))
-        # (Existing Elo update logic runs here)
-        try:
-            update_elo_ratings(
-            team_a_ids, team_b_ids, score_a, score_b, short_team, minutes_short)
-        except TypeError:
-            # Fallback if your team_balancer function only accepts 4 arguments
-            update_elo_ratings(team_a_ids, team_b_ids, score_a, score_b)
-        for ts_id in top_scorer_ids:
-            p = (
-                supabase.table("players")
-                .select("elo_rating")
-                .eq("id", ts_id)
-                .execute()
-            )
-            if p.data:
-                supabase.table("players").update(
-                    {"elo_rating": p.data[0]["elo_rating"] + 10}
-                ).eq("id", ts_id).execute()
-        flash("Match score and Elo ratings successfully updated! ⚽")
-    else:
-        flash("Casual kickabout recorded! Attendance and streaks updated (Elo unchanged). ⚡")
-
-    # Clear draft session if one was stored
-    session.pop("draft_match", None)
-    return redirect(url_for("index"))
+    except Exception as e:
+        print(f"CRITICAL ERROR in record_score: {e}")
+        flash(f"⚠️ Error recording score: {e}")
+        return redirect(url_for("index"))
 
 
 @app.route("/finalize-mvp", methods=["POST"])
