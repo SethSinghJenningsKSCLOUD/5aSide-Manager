@@ -702,108 +702,136 @@ def finalize_mvp():
 
 @app.route("/rsvp", methods=["GET"])
 def rsvp_page():
-    settings = get_settings()
-    now_uk = datetime.now(UK_TZ)
+    try:
+        settings = get_settings()
+        now_uk = datetime.now(UK_TZ)
 
-    recent_match_res = (
-        supabase.table("matches")
-        .select("*")
-        .eq("is_completed", True)
-        .order("match_date", desc=True)
-        .limit(1)
-        .execute()
-    )
-    last_match = recent_match_res.data[0] if recent_match_res.data else None
+        # Fetch most recent completed match
+        recent_match_res = (
+            supabase.table("matches")
+            .select("*")
+            .eq("is_completed", True)
+            .order("match_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        last_match = recent_match_res.data[0] if recent_match_res.data else None
 
-    active_poll_match = None
-    poll_hours_left = None
-    match_attendees = []
-    live_poll_results = []
-    crowned_mvp = None
+        active_poll_match = None
+        poll_hours_left = None
+        match_attendees = []
+        live_poll_results = []
+        crowned_mvp = None
 
-    if last_match:
-        m_date = date.fromisoformat(last_match["match_date"])
-        time_str = settings.get("match_time", "18:30:00")
-        m_hour, m_min = [int(x) for x in time_str.split(":")[:2]]
-        match_end = datetime.combine(m_date, time(m_hour, m_min), tzinfo=UK_TZ) + timedelta(minutes=settings.get("duration_minutes", 60))
-        poll_deadline = match_end + timedelta(hours=settings.get("poll_duration_hours", 48))
+        if last_match:
+            # Determine poll window based on match finish time
+            m_date = date.fromisoformat(str(last_match["match_date"])[:10])
+            time_str = settings.get("match_time", "18:30:00")
+            m_hour, m_min = [int(x) for x in time_str.split(":")[:2]]
+            
+            # Combine cleanly with tzinfo (no .localize call)
+            match_end = datetime.combine(m_date, time(m_hour, m_min), tzinfo=UK_TZ) + timedelta(minutes=settings.get("duration_minutes", 60))
+            poll_deadline = match_end + timedelta(hours=settings.get("poll_duration_hours", 48))
 
-        if now_uk < poll_deadline:
-            active_poll_match = last_match
-            poll_hours_left = max(1, round((poll_deadline - now_uk).total_seconds() / 3600))
+            if now_uk < poll_deadline:
+                active_poll_match = last_match
+                poll_hours_left = max(1, round((poll_deadline - now_uk).total_seconds() / 3600))
 
-            att_res = (
-                supabase.table("match_attendance")
-                .select("player_id, players(id, name)")
-                .eq("match_id", active_poll_match["id"])
-                .execute()
-            )
-            match_attendees = sorted(
-                [{"id": r["players"]["id"], "name": r["players"]["name"]} for r in (att_res.data or []) if r.get("players")],
-                key=lambda x: x["name"]
-            )
+                # Fetch attendees for poll dropdown
+                att_res = (
+                    supabase.table("match_attendance")
+                    .select("player_id, players(id, name)")
+                    .eq("match_id", active_poll_match["id"])
+                    .execute()
+                )
+                match_attendees = sorted(
+                    [{"id": r["players"]["id"], "name": r["players"]["name"]} for r in (att_res.data or []) if r.get("players")],
+                    key=lambda x: x["name"]
+                )
 
-            votes_res = supabase.table("mvp_votes").select("voter_id, voted_for_id").eq("match_id", active_poll_match["id"]).execute()
-            votes_data = votes_res.data or []
-            total_votes = len(votes_data)
+                # Live vote tally (for real-time chart)
+                votes_res = supabase.table("mvp_votes").select("voter_id, voted_for_id").eq("match_id", active_poll_match["id"]).execute()
+                votes_data = votes_res.data or []
+                total_votes = len(votes_data)
 
-            tally_map = {att["id"]: {"id": att["id"], "name": att["name"], "votes": 0} for att in match_attendees}
-            for v in votes_data:
-                tgt = v.get("voted_for_id")
-                if tgt in tally_map:
-                    tally_map[tgt]["votes"] += 1
+                tally_map = {att["id"]: {"id": att["id"], "name": att["name"], "votes": 0} for att in match_attendees}
+                for v in votes_data:
+                    tgt = v.get("voted_for_id")
+                    if tgt in tally_map:
+                        tally_map[tgt]["votes"] += 1
 
-            live_poll_results = sorted(
-                [
-                    {
-                        "name": v["name"],
-                        "votes": v["votes"],
-                        "pct": round((v["votes"] / total_votes) * 100) if total_votes > 0 else 0
-                    }
-                    for v in tally_map.values() if v["votes"] >= 1
-                ],
-                key=lambda x: x["votes"],
-                reverse=True
-            )
-        else:
-            if last_match.get("mvp_player_id"):
-                p_win = supabase.table("players").select("name").eq("id", last_match["mvp_player_id"]).execute()
-                if p_win.data:
-                    crowned_mvp = {"name": p_win.data[0]["name"], "match_date": last_match["match_date"]}
+                # Only show players with >= 1 vote
+                live_poll_results = sorted(
+                    [
+                        {
+                            "name": v["name"],
+                            "votes": v["votes"],
+                            "pct": round((v["votes"] / total_votes) * 100) if total_votes > 0 else 0
+                        }
+                        for v in tally_map.values() if v["votes"] >= 1
+                    ],
+                    key=lambda x: x["votes"],
+                    reverse=True
+                )
+            else:
+                # Poll finished: fetch crowned winner if recorded
+                if last_match.get("mvp_player_id"):
+                    p_win = supabase.table("players").select("name").eq("id", last_match["mvp_player_id"]).execute()
+                    if p_win.data:
+                        crowned_mvp = {"name": p_win.data[0]["name"], "match_date": last_match["match_date"]}
 
-    upcoming_date = get_upcoming_match_date()
-    m_hour, m_min = [int(x) for x in settings.get("match_time", "18:30:00").split(":")[:2]]
-    kickoff_dt = datetime.combine(upcoming_date, time(m_hour, m_min), tzinfo=UK_TZ)
-    lock_dt = kickoff_dt - timedelta(minutes=settings.get("rsvp_cutoff_minutes", 60))
-    is_locked = (now_uk >= lock_dt and now_uk < kickoff_dt + timedelta(minutes=settings.get("duration_minutes", 60)))
+        # Match Lock Evaluation
+        upcoming_date = get_upcoming_match_date()
+        m_hour, m_min = [int(x) for x in settings.get("match_time", "18:30:00").split(":")[:2]]
+        kickoff_dt = datetime.combine(upcoming_date, time(m_hour, m_min), tzinfo=UK_TZ)
+        lock_dt = kickoff_dt - timedelta(minutes=settings.get("rsvp_cutoff_minutes", 60))
+        is_locked = (now_uk >= lock_dt and now_uk < kickoff_dt + timedelta(minutes=settings.get("duration_minutes", 60)))
 
-    players = supabase.table("players").select("*").order("name").execute().data or []
-    avail_resp = supabase.table("availability").select("*").eq("match_date", str(upcoming_date)).execute()
-    rsvps = {row["player_id"]: row["status"] for row in (avail_resp.data or [])}
+        # Fetch Players & RSVPs for target fixture
+        players = supabase.table("players").select("*").order("name").execute().data or []
+        avail_resp = supabase.table("availability").select("*").eq("match_date", str(upcoming_date)).execute()
+        rsvps = {row["player_id"]: row["status"] for row in (avail_resp.data or [])}
 
-    stats = get_player_stats()
-    for p in players:
-        p_stat = stats.get(p["id"], {})
-        p["attn_streak"] = p_stat.get("attn_streak", 0)
-        p["win_streak"] = p_stat.get("win_streak", 0)
-        p["appearances"] = p_stat.get("appearances", 0)
-        p["win_pct"] = p_stat.get("win_pct")
-        p["attn_pct"] = p_stat.get("attn_pct")
-        p["mvp_count"] = p_stat.get("mvp_count", 0)
+        stats = get_player_stats()
+        for p in players:
+            p_stat = stats.get(p["id"], {})
+            p["attn_streak"] = p_stat.get("attn_streak", 0)
+            p["win_streak"] = p_stat.get("win_streak", 0)
+            p["appearances"] = p_stat.get("appearances", 0)
+            p["win_pct"] = p_stat.get("win_pct")
+            p["attn_pct"] = p_stat.get("attn_pct")
+            p["mvp_count"] = p_stat.get("mvp_count", 0)
 
-    return render_template(
-        "rsvp.html",
-        settings=settings,
-        players=players,
-        rsvps=rsvps,
-        match_date=upcoming_date,
-        is_locked=is_locked,
-        active_poll_match=active_poll_match,
-        poll_hours_left=poll_hours_left,
-        match_attendees=match_attendees,
-        live_poll_results=live_poll_results,
-        crowned_mvp=crowned_mvp,
-    )
+        return render_template(
+            "rsvp.html",
+            settings=settings,
+            players=players,
+            rsvps=rsvps,
+            match_date=upcoming_date,
+            is_locked=is_locked,
+            active_poll_match=active_poll_match,
+            poll_hours_left=poll_hours_left,
+            match_attendees=match_attendees,
+            live_poll_results=live_poll_results,
+            crowned_mvp=crowned_mvp,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        flash(f"⚠️ Error loading RSVP: {e}")
+        return render_template(
+            "rsvp.html",
+            settings=get_settings(),
+            players=[],
+            rsvps={},
+            match_date=get_upcoming_match_date(),
+            is_locked=False,
+            active_poll_match=None,
+            poll_hours_left=None,
+            match_attendees=[],
+            live_poll_results=[],
+            crowned_mvp=None,
+        )
 
 
 @app.route("/rsvp", methods=["POST"])
