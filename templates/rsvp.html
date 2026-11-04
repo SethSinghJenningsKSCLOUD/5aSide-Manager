@@ -53,6 +53,7 @@
 </head>
 <body>
 
+    <!-- FLASH MESSAGES -->
     {% with messages = get_flashed_messages() %}
         {% if messages %}
         <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; text-align: center;">
@@ -228,7 +229,7 @@
 
             <span class="switch-link" onclick="clearSavedPlayer()">Not you? Switch player</span>
         </div>
-        {% endif %} <!-- Properly closes {% if is_locked %} -->
+        {% endif %} <!-- Closes {% if is_locked %} -->
 
         <div class="roster-section">
             <div class="roster-header">
@@ -251,6 +252,7 @@
         </div>
     </div>
 
+    <!-- STATS MODAL -->
     <div id="stats-modal" class="modal-overlay" style="display: none;" onclick="closeModalOnBg(event)">
         <div class="modal-card">
             <h3 id="modal-player-name" style="margin-top: 0; margin-bottom: 5px;"></h3>
@@ -506,6 +508,7 @@
         init();
     </script>
     
+    <!-- FLOATING DOCK -->
     <div class="app-nav-dock">
         <button type="button" class="dock-btn" onclick="history.back()" title="Back">◀</button>
         <button type="button" class="dock-btn" onclick="location.reload()" title="Refresh">🔄</button>
