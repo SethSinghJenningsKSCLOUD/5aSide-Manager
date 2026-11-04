@@ -1,6 +1,8 @@
+import json
 import os
 from datetime import date, datetime, time, timedelta
 from functools import wraps
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from supabase import Client, create_client
@@ -19,6 +21,7 @@ key: str = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
 ELO_MAP = {"1": 700, "2": 850, "3": 1000, "4": 1150, "5": 1300}
+UK_TZ = ZoneInfo("Europe/London")
 
 
 def admin_required(f):
@@ -54,10 +57,72 @@ def admin_logout():
     return redirect(url_for("rsvp_page"))
 
 
+def get_settings():
+    try:
+        res = supabase.table("app_settings").select("*").eq("id", 1).execute()
+        if res.data:
+            return res.data[0]
+    except Exception as e:
+        print(f"app_settings lookup: {e}")
+    return {
+        "team_name": "Monday Night 5-a-Side",
+        "venue_address": "",
+        "match_weekday": 0,
+        "match_time": "18:30:00",
+        "duration_minutes": 60,
+        "frequency_weeks": 1,
+        "rsvp_cutoff_minutes": 60,
+        "poll_duration_hours": 48,
+        "skipped_dates": [],
+    }
+
+
+def get_target_fixture_dates(count=4):
+    """Calculates upcoming scheduled fixture dates taking frequency and skipped dates into account."""
+    settings = get_settings()
+    target_weekday = settings.get("match_weekday", 0)
+    skipped = set(settings.get("skipped_dates") or [])
+    step_days = 7 * max(1, settings.get("frequency_weeks", 1))
+
+    now = datetime.now(UK_TZ)
+    today = now.date()
+
+    # Days until target day
+    days_ahead = (target_weekday - today.weekday()) % 7
+    candidate = today + timedelta(days=days_ahead)
+
+    # Parse match time
+    time_str = settings.get("match_time", "18:30:00")
+    m_hour, m_min = [int(x) for x in time_str.split(":")[:2]]
+    kickoff_today = datetime.combine(today, time(m_hour, m_min), tzinfo=UK_TZ)
+    cutoff_today = kickoff_today - timedelta(minutes=settings.get("rsvp_cutoff_minutes", 60))
+
+    # If today is match day and we have passed the cutoff, the upcoming game is the next fixture
+    if today == candidate and now >= cutoff_today:
+        candidate += timedelta(days=step_days)
+
+    fixtures = []
+    while len(fixtures) < count:
+        d_str = str(candidate)
+        is_skipped = d_str in skipped
+        fixtures.append({"date": d_str, "is_skipped": is_skipped})
+        candidate += timedelta(days=step_days)
+
+    return fixtures
+
+
+def get_upcoming_match_date():
+    """Gets the next active match date (ignoring skipped holiday weeks)."""
+    fixtures = get_target_fixture_dates(count=8)
+    for f in fixtures:
+        if not f["is_skipped"]:
+            return date.fromisoformat(f["date"])
+    return date.today() + timedelta(days=7)
+
+
 def get_upcoming_monday():
-    today = date.today()
-    days_until_monday = (0 - today.weekday()) % 7
-    return today + timedelta(days=days_until_monday)
+    """Legacy alias so all routes work without modification."""
+    return get_upcoming_match_date()
 
 
 def sync_admin_attendance(selected_ids: list, upcoming_date):
@@ -165,10 +230,11 @@ def get_player_stats():
                 if attn_streak_active:
                     attn_streak += 1
 
-                # Check both team_assigned (new) and team (legacy)
-                team = (
+                # Check both team_assigned (new) and team (legacy), normalize 'Team A' -> 'A'
+                raw_team = (
                     p_att.get("team_assigned") or p_att.get("team") or ""
                 ).strip().upper()
+                team = "A" if "A" in raw_team else ("B" if "B" in raw_team else "")
 
                 # Safely handle None / NULL values without crashing
                 raw_a = (
@@ -230,7 +296,10 @@ def get_player_stats():
 @app.route("/")
 @admin_required
 def index():
-    upcoming_date = get_upcoming_monday()
+    settings = get_settings()
+    upcoming_date = get_upcoming_match_date()
+    target_fixtures = get_target_fixture_dates(4)
+
     response = supabase.table("players").select("*").order("name").execute()
     players = response.data or []
     player_map = {p["id"]: p["name"] for p in players}
@@ -255,12 +324,12 @@ def index():
         .select("*, players(name)")
         .eq("match_date", str(upcoming_date))
         .eq("is_late", True)
-        .order("dropped_at", desc=True)
+        .order("created_at", desc=True)
         .execute()
     )
     late_alerts = late_flakes_resp.data or []
 
-    # 1. Check for an active, uncompleted match draft (persisted teams)
+    # 1. Check for active uncompleted draft
     draft_res = (
         supabase.table("matches")
         .select("*")
@@ -283,7 +352,7 @@ def index():
         for row in (att_res.data or []):
             p = row.get("players")
             if p:
-                if row["team_assigned"] == "A":
+                if row.get("team_assigned") == "A":
                     team_a_players.append(p)
                 else:
                     team_b_players.append(p)
@@ -304,7 +373,7 @@ def index():
                 "selected_players": team_a_players + team_b_players,
             }
 
-   # 2. Check for most recent completed match for Star Player award / amendment
+    # 2. Check most recent completed match for Star Player
     recent_match_res = (
         supabase.table("matches")
         .select("*")
@@ -337,10 +406,7 @@ def index():
         )
         votes_list = votes_res.data or []
 
-        tally = {
-            p["id"]: {"id": p["id"], "name": p["name"], "votes": 0}
-            for p in attendees
-        }
+        tally = {p["id"]: {"id": p["id"], "name": p["name"], "votes": 0} for p in attendees}
         for v in votes_list:
             tgt = v.get("voted_for_id")
             if tgt in tally:
@@ -348,14 +414,9 @@ def index():
             elif tgt in player_map:
                 tally[tgt] = {"id": tgt, "name": player_map[tgt], "votes": 1}
 
-        ranked_candidates = sorted(
-            tally.values(), key=lambda x: x["votes"], reverse=True
-        )
-
+        ranked_candidates = sorted(tally.values(), key=lambda x: x["votes"], reverse=True)
         current_mvp_id = last_completed.get("mvp_player_id")
-        current_mvp_name = (
-            player_map.get(current_mvp_id) if current_mvp_id else None
-        )
+        current_mvp_name = player_map.get(current_mvp_id) if current_mvp_id else None
 
         pending_mvp_poll = {
             "match": last_completed,
@@ -367,6 +428,8 @@ def index():
 
     return render_template(
         "index.html",
+        settings=settings,
+        target_fixtures=target_fixtures,
         players=players,
         match_result=match_result,
         late_alerts=late_alerts,
@@ -379,7 +442,7 @@ def index():
 @admin_required
 def sync_attendance():
     selected_ids = request.form.getlist("available_players")
-    upcoming_date = get_upcoming_monday()
+    upcoming_date = get_upcoming_match_date()
     sync_admin_attendance(selected_ids, upcoming_date)
     return redirect(url_for("index"))
 
@@ -388,7 +451,7 @@ def sync_attendance():
 @admin_required
 def generate():
     selected_ids = request.form.getlist("available_players")
-    upcoming_date = get_upcoming_monday()
+    upcoming_date = get_upcoming_match_date()
 
     if not selected_ids:
         return redirect(url_for("index"))
@@ -432,7 +495,7 @@ def generate():
 @app.route("/reset-draft", methods=["POST"])
 @admin_required
 def reset_draft():
-    upcoming_date = get_upcoming_monday()
+    upcoming_date = get_upcoming_match_date()
     draft_res = (
         supabase.table("matches")
         .select("id")
@@ -452,9 +515,8 @@ def reset_draft():
 @admin_required
 def record_score():
     try:
-        match_date = request.form.get("match_date") or str(get_upcoming_monday())
-        
-        # Safely parse scores (handles blank inputs without crashing)
+        match_date = request.form.get("match_date") or str(get_upcoming_match_date())
+
         raw_a = request.form.get("score_a")
         raw_b = request.form.get("score_b")
         score_a = int(raw_a) if raw_a and raw_a.strip().isdigit() else 0
@@ -469,7 +531,6 @@ def record_score():
             flash("⚠️ Cannot record score: No players selected.")
             return redirect(url_for("index"))
 
-        # 1. Update the match record to completed (correct column names)
         match_data = {
             "match_date": match_date,
             "team_a_score": score_a,
@@ -487,7 +548,6 @@ def record_score():
 
         match_id = match_res.data[0]["id"]
 
-        # 2. Record attendance with correct column name (team_assigned)
         supabase.table("match_attendance").delete().eq("match_id", match_id).execute()
         attendance_rows = []
         for p_id in team_a_ids:
@@ -506,12 +566,11 @@ def record_score():
         if attendance_rows:
             supabase.table("match_attendance").insert(attendance_rows).execute()
 
-        # 3. Elo Calculations (skipped for casual matches)
         if not is_casual:
             short_team = request.form.get("short_team", "none")
             raw_mins = request.form.get("minutes_short")
             minutes_short = int(raw_mins) if raw_mins and raw_mins.strip().isdigit() else 0
-            
+
             try:
                 update_elo_ratings(team_a_ids, team_b_ids, score_a, score_b, short_team, minutes_short)
             except Exception as elo_err:
@@ -521,7 +580,6 @@ def record_score():
                 except Exception as elo_err2:
                     print(f"4-arg update_elo_ratings failed: {elo_err2}")
 
-            # Top Scorers bonus (+10 Elo)
             for ts_id in top_scorer_ids:
                 try:
                     p = supabase.table("players").select("elo_rating").eq("id", ts_id).execute()
@@ -564,7 +622,6 @@ def finalize_mvp():
         match_res.data[0].get("mvp_player_id") if match_res.data else None
     )
 
-    # Action 1: Clear the Star Player award completely
     if action == "clear" or winner_id == "clear":
         if prev_mvp_id:
             prev_p = (
@@ -589,7 +646,6 @@ def finalize_mvp():
     if not winner_id:
         return redirect(url_for("index"))
 
-    # Action 2: If re-awarding to someone else, revert previous winner's +20 Elo
     if prev_mvp_id and prev_mvp_id != winner_id:
         prev_p = (
             supabase.table("players")
@@ -602,7 +658,6 @@ def finalize_mvp():
                 {"elo_rating": prev_p.data[0]["elo_rating"] - 20}
             ).eq("id", prev_mvp_id).execute()
 
-    # Award +20 Elo to new winner (if not already awarded)
     if prev_mvp_id != winner_id:
         new_p = (
             supabase.table("players")
@@ -626,16 +681,83 @@ def finalize_mvp():
 
 @app.route("/rsvp", methods=["GET"])
 def rsvp_page():
-    upcoming_date = get_upcoming_monday()
-    players = (
-        supabase.table("players").select("*").order("name").execute().data or []
-    )
-    avail_resp = (
-        supabase.table("availability")
+    settings = get_settings()
+    now_uk = datetime.now(UK_TZ)
+
+    recent_match_res = (
+        supabase.table("matches")
         .select("*")
-        .eq("match_date", str(upcoming_date))
+        .eq("is_completed", True)
+        .order("match_date", desc=True)
+        .limit(1)
         .execute()
     )
+    last_match = recent_match_res.data[0] if recent_match_res.data else None
+
+    active_poll_match = None
+    poll_hours_left = None
+    match_attendees = []
+    live_poll_results = []
+    crowned_mvp = None
+
+    if last_match:
+        m_date = date.fromisoformat(last_match["match_date"])
+        time_str = settings.get("match_time", "18:30:00")
+        m_hour, m_min = [int(x) for x in time_str.split(":")[:2]]
+        match_end = datetime.combine(m_date, time(m_hour, m_min), tzinfo=UK_TZ) + timedelta(minutes=settings.get("duration_minutes", 60))
+        poll_deadline = match_end + timedelta(hours=settings.get("poll_duration_hours", 48))
+
+        if now_uk < poll_deadline:
+            active_poll_match = last_match
+            poll_hours_left = max(1, round((poll_deadline - now_uk).total_seconds() / 3600))
+
+            att_res = (
+                supabase.table("match_attendance")
+                .select("player_id, players(id, name)")
+                .eq("match_id", active_poll_match["id"])
+                .execute()
+            )
+            match_attendees = sorted(
+                [{"id": r["players"]["id"], "name": r["players"]["name"]} for r in (att_res.data or []) if r.get("players")],
+                key=lambda x: x["name"]
+            )
+
+            votes_res = supabase.table("mvp_votes").select("voter_id, voted_for_id").eq("match_id", active_poll_match["id"]).execute()
+            votes_data = votes_res.data or []
+            total_votes = len(votes_data)
+
+            tally_map = {att["id"]: {"id": att["id"], "name": att["name"], "votes": 0} for att in match_attendees}
+            for v in votes_data:
+                tgt = v.get("voted_for_id")
+                if tgt in tally_map:
+                    tally_map[tgt]["votes"] += 1
+
+            live_poll_results = sorted(
+                [
+                    {
+                        "name": v["name"],
+                        "votes": v["votes"],
+                        "pct": round((v["votes"] / total_votes) * 100) if total_votes > 0 else 0
+                    }
+                    for v in tally_map.values() if v["votes"] >= 1
+                ],
+                key=lambda x: x["votes"],
+                reverse=True
+            )
+        else:
+            if last_match.get("mvp_player_id"):
+                p_win = supabase.table("players").select("name").eq("id", last_match["mvp_player_id"]).execute()
+                if p_win.data:
+                    crowned_mvp = {"name": p_win.data[0]["name"], "match_date": last_match["match_date"]}
+
+    upcoming_date = get_upcoming_match_date()
+    m_hour, m_min = [int(x) for x in settings.get("match_time", "18:30:00").split(":")[:2]]
+    kickoff_dt = datetime.combine(upcoming_date, time(m_hour, m_min), tzinfo=UK_TZ)
+    lock_dt = kickoff_dt - timedelta(minutes=settings.get("rsvp_cutoff_minutes", 60))
+    is_locked = (now_uk >= lock_dt and now_uk < kickoff_dt + timedelta(minutes=settings.get("duration_minutes", 60)))
+
+    players = supabase.table("players").select("*").order("name").execute().data or []
+    avail_resp = supabase.table("availability").select("*").eq("match_date", str(upcoming_date)).execute()
     rsvps = {row["player_id"]: row["status"] for row in (avail_resp.data or [])}
 
     stats = get_player_stats()
@@ -647,56 +769,19 @@ def rsvp_page():
         p["win_pct"] = p_stat.get("win_pct")
         p["attn_pct"] = p_stat.get("attn_pct")
         p["mvp_count"] = p_stat.get("mvp_count", 0)
-        p["is_recent_mvp"] = p_stat.get("is_recent_mvp", False)
-
-    # 48-Hour Star Player Poll Window
-    recent_match_res = (
-        supabase.table("matches")
-        .select("*")
-        .eq("is_completed", True)
-        .order("match_date", desc=True)
-        .limit(1)
-        .execute()
-    )
-    last_match = recent_match_res.data[0] if recent_match_res.data else None
-    active_poll_match = None
-    poll_hours_left = None
-    match_attendees = []
-
-    if last_match:
-        match_dt = datetime.combine(
-            date.fromisoformat(last_match["match_date"]), time(19, 0)
-        )
-        poll_deadline = match_dt + timedelta(hours=48)
-        now = datetime.now()
-
-        if now < poll_deadline:
-            active_poll_match = last_match
-            poll_hours_left = max(
-                1, round((poll_deadline - now).total_seconds() / 3600)
-            )
-
-            att_res = (
-                supabase.table("match_attendance")
-                .select("player_id, players(id, name)")
-                .eq("match_id", active_poll_match["id"])
-                .execute()
-            )
-            match_attendees = [
-                {"id": row["players"]["id"], "name": row["players"]["name"]}
-                for row in (att_res.data or [])
-                if row.get("players")
-            ]
-            match_attendees.sort(key=lambda x: x["name"])
 
     return render_template(
         "rsvp.html",
+        settings=settings,
         players=players,
         rsvps=rsvps,
         match_date=upcoming_date,
+        is_locked=is_locked,
         active_poll_match=active_poll_match,
         poll_hours_left=poll_hours_left,
         match_attendees=match_attendees,
+        live_poll_results=live_poll_results,
+        crowned_mvp=crowned_mvp,
     )
 
 
@@ -704,7 +789,7 @@ def rsvp_page():
 def submit_rsvp():
     player_id = request.form.get("player_id")
     status = request.form.get("status")
-    upcoming_date = get_upcoming_monday()
+    upcoming_date = get_upcoming_match_date()
 
     if player_id and status in ["IN", "OUT"]:
         prev_resp = (
@@ -721,7 +806,6 @@ def submit_rsvp():
         now = datetime.now()
         now_iso = now.isoformat()
 
-        # 15-Minute Grace Period
         is_grace_period = False
         if prev_updated_at and prev_status == "IN":
             try:
@@ -747,7 +831,6 @@ def submit_rsvp():
             on_conflict="player_id,match_date",
         ).execute()
 
-        # Flake Logging
         if prev_status == "IN" and status == "OUT" and not is_grace_period:
             match_datetime = datetime.combine(upcoming_date, time(19, 0))
             hours_until = (match_datetime - now).total_seconds() / 3600
@@ -763,7 +846,6 @@ def submit_rsvp():
                     }
                 ).execute()
 
-        # Auto-bump Logic (Cap at 12)
         if status == "IN":
             in_avail = (
                 supabase.table("availability")
@@ -801,7 +883,7 @@ def submit_rsvp():
 def add_player_rsvp():
     name = request.form.get("name", "").strip()
     self_rating = request.form.get("rating", "3")
-    upcoming_date = get_upcoming_monday()
+    upcoming_date = get_upcoming_match_date()
 
     if name:
         base_elo = ELO_MAP.get(self_rating, 1000)
@@ -911,9 +993,7 @@ def toggle_core(player_id):
 def vote_mvp():
     match_id = request.form.get("match_id")
     voter_id = request.form.get("voter_id")
-    voted_for_id = request.form.get("voted_for_id") or request.form.get(
-        "voted_player_id"
-    )
+    voted_for_id = request.form.get("voted_for_id")
     next_week_status = request.form.get("next_week_status")
 
     if not match_id or not voter_id or not voted_for_id:
@@ -924,44 +1004,77 @@ def vote_mvp():
         flash("You cannot vote for yourself! 😉")
         return redirect(url_for("rsvp_page"))
 
-    # Strictly require attendance for next week
     if next_week_status not in ["IN", "OUT"]:
-        flash("⚠️ Please let us know if you are IN or OUT for next week before voting!")
+        flash("⚠️ Please confirm if you are IN or OUT for next week before voting!")
         return redirect(url_for("rsvp_page"))
 
-    # 1. Record the vote
-    try:
-        supabase.table("mvp_votes").upsert(
-            {
-                "match_id": match_id,
-                "voter_id": voter_id,
-                "voted_for_id": voted_for_id,
-            },
-            on_conflict="match_id,voter_id",
-        ).execute()
-    except Exception as e:
-        print(f"Error saving MVP vote: {e}")
-        flash(f"Vote could not be saved: {e}")
-        return redirect(url_for("rsvp_page"))
+    # 1. Record MVP vote
+    supabase.table("mvp_votes").upsert(
+        {"match_id": match_id, "voter_id": voter_id, "voted_for_id": voted_for_id},
+        on_conflict="match_id,voter_id",
+    ).execute()
 
-    # 2. Lock in next week's RSVP
-    upcoming_date = get_upcoming_monday()
-    try:
-        supabase.table("availability").upsert(
-            {
-                "player_id": str(voter_id),
-                "match_date": str(upcoming_date),
-                "status": next_week_status,
-                "updated_at": datetime.now().isoformat(),
-            },
-            on_conflict="player_id,match_date",
-        ).execute()
-        flash(f"⭐ Vote cast & you're locked in as {next_week_status} for next Monday! ⚽")
-    except Exception as e:
-        print(f"Error saving RSVP: {e}")
-        flash("Vote recorded! ⭐")
+    # 2. Automatically points to the TRUE next game date
+    next_fixture_date = get_upcoming_match_date()
+    supabase.table("availability").upsert(
+        {
+            "player_id": str(voter_id),
+            "match_date": str(next_fixture_date),
+            "status": next_week_status,
+            "updated_at": datetime.now().isoformat(),
+        },
+        on_conflict="player_id,match_date",
+    ).execute()
 
+    flash(f"⭐ Vote saved! You are confirmed as {next_week_status} for {next_fixture_date}! ⚽")
     return redirect(url_for("rsvp_page"))
+
+
+@app.route("/settings", methods=["POST"])
+@admin_required
+def update_settings():
+    team_name = request.form.get("team_name", "Monday Night 5-a-Side").strip()
+    venue_address = request.form.get("venue_address", "").strip()
+    match_weekday = int(request.form.get("match_weekday", 0))
+    match_time = request.form.get("match_time", "18:30")
+    duration_minutes = int(request.form.get("duration_minutes", 60))
+    frequency_weeks = int(request.form.get("frequency_weeks", 1))
+    rsvp_cutoff_minutes = int(request.form.get("rsvp_cutoff_minutes", 60))
+    poll_duration_hours = int(request.form.get("poll_duration_hours", 48))
+
+    supabase.table("app_settings").upsert({
+        "id": 1,
+        "team_name": team_name,
+        "venue_address": venue_address,
+        "match_weekday": match_weekday,
+        "match_time": match_time,
+        "duration_minutes": duration_minutes,
+        "frequency_weeks": frequency_weeks,
+        "rsvp_cutoff_minutes": rsvp_cutoff_minutes,
+        "poll_duration_hours": poll_duration_hours,
+    }).execute()
+
+    flash("Settings updated successfully! ⚙️")
+    return redirect(url_for("index"))
+
+
+@app.route("/toggle-skip-date", methods=["POST"])
+@admin_required
+def toggle_skip_date():
+    skip_date = request.form.get("date")
+    settings = get_settings()
+    skipped = set(settings.get("skipped_dates") or [])
+
+    if skip_date in skipped:
+        skipped.remove(skip_date)
+        flash(f"Fixture date {skip_date} restored! ⚽")
+    else:
+        skipped.add(skip_date)
+        flash(f"Fixture date {skip_date} skipped (holiday)! 🏖️")
+
+    supabase.table("app_settings").update({"skipped_dates": list(skipped)}).eq("id", 1).execute()
+    return redirect(url_for("index"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)

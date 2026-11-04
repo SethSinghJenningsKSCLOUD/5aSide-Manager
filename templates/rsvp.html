@@ -3,27 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Match RSVP - Monday Night 5-a-Side</title>
+    <title>{{ settings.team_name }} - RSVP</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
         body { font-family: system-ui, -apple-system, sans-serif; max-width: 550px; margin: 20px auto; padding: 0 15px; line-height: 1.5; background: #f8f9fa; color: #212529; padding-bottom: 85px !important; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; margin-bottom: 20px; }
         .poll-card { background: #fffdf5; border: 2px solid #ffeeba; }
-        .btn-group { display: flex; gap: 15px; margin-top: 15px; }
-        .btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: white; transition: transform 0.1s ease; }
+        .btn-group { display: flex; gap: 12px; margin-top: 15px; }
+        .btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; color: white; transition: transform 0.1s ease; }
         .btn:active { transform: scale(0.98); }
         .btn-in { background: #28a745; }
         .btn-out { background: #dc3545; }
         .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
-        .player-btn { padding: 12px; border: 1px solid #ced4da; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .player-btn { padding: 12px; border: 1px solid #ced4da; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; }
         .player-btn:hover { background: #e9ecef; }
         .new-btn { background: #0066cc; color: white; border: none; }
-        .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
+        .status-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-weight: bold; margin-top: 10px; }
         .status-IN { background: #d4edda; color: #155724; }
         .status-OUT { background: #f8d7da; color: #721c24; }
-        .switch-link { margin-top: 20px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
+        .switch-link { margin-top: 18px; display: inline-block; font-size: 0.85rem; color: #6c757d; text-decoration: underline; cursor: pointer; }
+        .venue-pill { display: inline-flex; align-items: center; gap: 5px; background: #e9ecef; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; color: #495057; margin-bottom: 12px; text-decoration: none; }
         
-        .streak-banner { background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.95rem; font-weight: 600; text-align: left; }
+        /* Live Bar Chart */
+        .chart-box { margin-top: 15px; text-align: left; background: white; padding: 12px; border-radius: 8px; border: 1px solid #f1f3f5; }
+        .chart-row { margin-bottom: 8px; font-size: 0.85rem; }
+        .chart-label { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 2px; }
+        .chart-track { background: #edf2f7; border-radius: 4px; height: 10px; overflow: hidden; width: 100%; }
+        .chart-fill { background: #ffc107; height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+
+        .streak-banner { background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.92rem; font-weight: 600; text-align: left; }
         .roster-section { text-align: left; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
         .roster-header { font-size: 1rem; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px; }
@@ -33,60 +41,16 @@
         .tag-out { background: #fce8e6; color: #c5221f; border: 1px solid #fad2cf; }
         .tag-pending { background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; }
         .ringer-alert { background: #e8f0fe; color: #1a73e8; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; }
-        
-        .feed-list { text-align: left; margin: 10px 0; padding-left: 0; list-style: none; font-size: 0.9rem; }
-        .feed-item { padding: 6px 0; border-bottom: 1px dashed #eee; color: #495057; }
-        
+
+        /* Stats Modal */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-card { background: white; padding: 22px; border-radius: 14px; width: 85%; max-width: 330px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.15); animation: popIn 0.15s ease-out; }
+        .modal-card { background: white; padding: 22px; border-radius: 14px; width: 85%; max-width: 330px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
         .modal-close-btn { margin-top: 15px; width: 100%; padding: 10px; background: #0066cc; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .app-nav-dock { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(33, 37, 41, 0.94); backdrop-filter: blur(8px); display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 30px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); z-index: 999; }
+        .dock-btn { background: transparent; border: none; color: #ffffff; font-size: 1.1rem; padding: 6px 10px; border-radius: 20px; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+        .dock-divider { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.3); margin: 0 2px; }
         input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ced4da; border-radius: 6px; }
-
-        /* FULL APP NAV DOCK */
-        .app-nav-dock {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(33, 37, 41, 0.94);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            border-radius: 30px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-            z-index: 999;
-        }
-
-        .dock-btn {
-            background: transparent;
-            border: none;
-            color: #ffffff;
-            font-size: 1.1rem;
-            padding: 6px 10px;
-            border-radius: 20px;
-            cursor: pointer;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.15s ease, transform 0.1s ease;
-        }
-
-        .dock-btn:active {
-            background: rgba(255, 255, 255, 0.25);
-            transform: scale(0.92);
-        }
-
-        .dock-divider {
-            width: 1px;
-            height: 18px;
-            background: rgba(255, 255, 255, 0.3);
-            margin: 0 2px;
-        }
     </style>
 </head>
 <body>
@@ -102,11 +66,20 @@
         {% endif %}
     {% endwith %}
 
-    <!-- STAR PLAYER POLL (Active 48h Window) -->
+    <!-- 🏆 POST-POLL CROWNED STAR PLAYER BANNER -->
+    {% if crowned_mvp and not active_poll_match %}
+    <div style="background: #eef2ff; border: 1px solid #c7d2fe; padding: 12px; border-radius: 10px; margin-bottom: 16px; text-align: center;">
+        <span style="font-size: 0.9rem; color: #3730a3; font-weight: bold;">
+            ⭐ Reigning Star Player: {{ crowned_mvp.name }} (+20 Elo from {{ crowned_mvp.match_date }}) 🏆
+        </span>
+    </div>
+    {% endif %}
+
+    <!-- ⭐ PHASE 3: ACTIVE 48-HOUR STAR PLAYER POLL -->
     {% if active_poll_match %}
     <div class="card poll-card" id="poll-card-container">
-        <h3 style="margin: 0 0 5px 0;">⭐ Star Player Vote</h3>
-        <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #856404;">
+        <h3 style="margin: 0 0 4px 0;">⭐ Star Player Vote</h3>
+        <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #856404;">
             Vote for last match's standout player! (<strong>{{ poll_hours_left }}h left</strong>)
         </p>
 
@@ -114,7 +87,7 @@
             <input type="hidden" name="match_id" value="{{ active_poll_match.id }}">
             <input type="hidden" name="voter_id" id="poll-voter-id">
 
-            <!-- Fallback if phone hasn't remembered player yet -->
+            <!-- Name selector if device not remembered -->
             <div id="voter-select-wrapper" style="text-align: left; margin-bottom: 8px;">
                 <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">Who is voting?</label>
                 <select id="poll-voter-select" onchange="onPollVoterChange(this.value)">
@@ -125,14 +98,12 @@
                 </select>
             </div>
 
-            <!-- Recognized voter banner -->
             <div id="voter-recognized-msg" style="display: none; font-size: 0.95rem; font-weight: bold; color: #495057; margin-bottom: 10px; text-align: left;">
                 Voting as: <span id="poll-voter-name" style="color: #0066cc;"></span>
             </div>
 
-            <!-- Standout Player Dropdown -->
             <div style="text-align: left; margin-bottom: 12px;">
-                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">Star Player Nomination:</label>
+                <label style="font-size: 0.85rem; font-weight: bold; color: #495057;">Select Star Player:</label>
                 <select name="voted_for_id" id="poll-candidate-select" required style="margin-top: 4px;">
                     <option value="" disabled selected>-- Select Star Player --</option>
                     {% for att in match_attendees %}
@@ -141,7 +112,7 @@
                 </select>
             </div>
 
-            <!-- Dual Action Buttons: RSVP + Vote in One Click -->
+            <!-- Single action: Vote + RSVP for next match -->
             <div style="display: flex; gap: 10px; margin-top: 10px;">
                 <button type="submit" name="next_week_status" value="IN" class="btn btn-in" style="font-size: 0.95rem; padding: 12px 6px;">
                     ⭐ Vote & I'm IN 🟢
@@ -151,12 +122,45 @@
                 </button>
             </div>
         </form>
+
+        <!-- Live Results Bar Chart -->
+        {% if live_poll_results %}
+        <div class="chart-box">
+            <div style="font-size: 0.8rem; font-weight: bold; color: #6c757d; margin-bottom: 8px;">📊 LIVE VOTE STANDINGS</div>
+            {% for item in live_poll_results %}
+            <div class="chart-row">
+                <div class="chart-label">
+                    <span>{{ item.name }}</span>
+                    <span>{{ item.votes }} vote{{ 's' if item.votes != 1 else '' }} ({{ item.pct }}%)</span>
+                </div>
+                <div class="chart-track">
+                <div class="chart-fill" data-pct="{{ item.pct }}"></div>
+            </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 
+    <!-- ⚽ MAIN FIXTURE & RSVP CARD -->
     <div class="card">
-        <h2>⚽ Monday Night RSVP</h2>
-        <p style="margin-top: -10px; color: #6c757d;"><strong>Match Date:</strong> {{ match_date }}</p>
+        <h2>⚽ {{ settings.team_name }}</h2>
+        {% if settings.venue_address %}
+        <div>
+            <a href="https://maps.google.com/?q={{ settings.venue_address | urlencode }}" target="_blank" class="venue-pill">
+                📍 {{ settings.venue_address }}
+            </a>
+        </div>
+        {% endif %}
+        <p style="margin-top: -6px; color: #6c757d;"><strong>Next Fixture:</strong> {{ match_date }}</p>
+
+        <!-- PRE-MATCH LOCK NOTICE -->
+        {% if is_locked %}
+        <div style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; font-weight: bold; margin: 15px 0;">
+            🔒 RSVPs are now locked for tonight's match. Please contact the match organiser directly for any emergency dropouts.
+        </div>
+        {% else %}
 
         <!-- STEP 1: INITIAL PLAYER SELECTION -->
         <div id="select-step">
@@ -201,6 +205,7 @@
             <div id="personal-streak-box"></div>
             <div id="current-status-box"></div>
 
+            <!-- Standard RSVP Form (always available so players can change status or RSVP without voting) -->
             <form action="/rsvp" method="POST" id="rsvp-form">
                 <input type="hidden" name="player_id" id="form-player-id">
                 <input type="hidden" name="status" id="form-status">
@@ -213,21 +218,17 @@
 
             <span class="switch-link" onclick="clearSavedPlayer()">Not you? Switch player</span>
         </div>
+        {% endif %}
 
-        <!-- LIVE RESPONSE DASHBOARD -->
+        <!-- LIVE ROSTER -->
         <div class="roster-section">
             <div class="roster-header">
-                <span>🟢 Playing This Week</span>
+                <span>🟢 Playing on {{ match_date }}</span>
                 <span id="in-count-badge">0 / 10</span>
             </div>
             
             <div id="ringer-needed-box"></div>
             <div class="tag-list" id="in-players-list"></div>
-
-            <!-- CONSOLIDATED MILESTONE FEED -->
-            <div id="milestone-feed-box" style="display: none;">
-                <ul class="feed-list" id="feed-list"></ul>
-            </div>
 
             <div class="roster-header" style="font-size: 0.9rem; color: #dc3545; margin-top: 10px;">
                 <span>🔴 Unavailable (<span id="out-count">0</span>)</span>
@@ -257,6 +258,7 @@
     <script>
         const rsvps = JSON.parse(document.getElementById('rsvps-data').textContent);
         const players = JSON.parse(document.getElementById('players-data').textContent);
+        const matchDateStr = "{{ match_date }}";
 
         function setStorage(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
         function getStorage(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -266,18 +268,14 @@
             const inList = document.getElementById('in-players-list');
             const outList = document.getElementById('out-players-list');
             const pendingList = document.getElementById('pending-players-list');
-            const feedList = document.getElementById('feed-list');
-            const feedBox = document.getElementById('milestone-feed-box');
             
             inList.innerHTML = '';
             outList.innerHTML = '';
             pendingList.innerHTML = '';
-            feedList.innerHTML = '';
 
             let inCount = 0;
             let outCount = 0;
             let pendingCount = 0;
-            let feedItems = [];
 
             players.forEach(p => {
                 const status = rsvps[p.id];
@@ -288,30 +286,6 @@
                 if (p.win_pct !== null && p.win_pct >= 70) tagBadges += ' 👑';
                 if (p.attn_pct !== null && p.attn_pct >= 75) tagBadges += ' 🛡️';
                 if (p.mvp_count > 0) tagBadges += ' ⭐';
-
-                // Consolidate badges & achievements onto one single line per player
-                let badges = '';
-                let details = [];
-                if (p.win_streak >= 2) {
-                    badges += '🔥 ';
-                    details.push(`won ${p.win_streak} games in a row`);
-                }
-                if (p.attn_streak >= 3) {
-                    badges += '⚡ ';
-                    details.push(`played ${p.attn_streak} weeks on the bounce`);
-                }
-                if (p.win_pct !== null && p.win_pct >= 70) {
-                    badges += '👑 ';
-                    details.push(`${p.win_pct}% win rate`);
-                }
-                if (p.attn_pct !== null && p.attn_pct >= 75) {
-                    badges += '🛡️ ';
-                    details.push(`${p.attn_pct}% loyalty`);
-                }
-
-                if (details.length > 0) {
-                    feedItems.push(`${badges.trim()} <strong>${p.name}</strong>: ${details.join(' & ')}.`);
-                }
 
                 const tagHtml = `<span class="tag ${status === 'IN' ? 'tag-in' : status === 'OUT' ? 'tag-out' : 'tag-pending'}" onclick="showPlayerStatsModal('${p.id}')">${p.name}${tagBadges}</span>`;
 
@@ -327,15 +301,6 @@
                 }
             });
 
-            if (feedItems.length > 0) {
-                feedBox.style.display = 'block';
-                feedItems.forEach(item => {
-                    feedList.innerHTML += `<li class="feed-item">${item}</li>`;
-                });
-            } else {
-                feedBox.style.display = 'none';
-            }
-
             document.getElementById('in-count-badge').innerText = `${inCount} / 10`;
             document.getElementById('out-count').innerText = outCount;
             document.getElementById('pending-count').innerText = pendingCount;
@@ -347,7 +312,7 @@
             } else if (inCount === 10) {
                 ringerBox.innerHTML = `<div class="ringer-alert" style="background:#d4edda; color:#155724;">✅ Full 5-a-side squad reached (10 players)!</div>`;
             } else if (inCount > 10 && inCount <= 12) {
-                ringerBox.innerHTML = `<div class="ringer-alert" style="background:#d4edda; color:#155724;">✅ Squad at ${inCount} players (subs included, cap is 12).</div>`;
+                ringerBox.innerHTML = `<div class="ringer-alert" style="background:#d4edda; color:#155724;">✅ Squad at ${inCount} players (subs included).</div>`;
             }
         }
 
@@ -450,18 +415,22 @@
         }
 
         function showRsvpScreen(id, name) {
-            document.getElementById('select-step').style.display = 'none';
-            document.getElementById('new-player-step').style.display = 'none';
-            document.getElementById('rsvp-step').style.display = 'block';
-            document.getElementById('welcome-msg').innerText = `Hey ${name}!`;
-            document.getElementById('form-player-id').value = id;
+            const selectStep = document.getElementById('select-step');
+            const rsvpStep = document.getElementById('rsvp-step');
+            if (selectStep) selectStep.style.display = 'none';
+            if (rsvpStep) rsvpStep.style.display = 'block';
+
+            const welcomeMsg = document.getElementById('welcome-msg');
+            if (welcomeMsg) welcomeMsg.innerText = `Hey ${name}!`;
+
+            const formPid = document.getElementById('form-player-id');
+            if (formPid) formPid.value = id;
 
             syncPollCard(id, name);
 
             const playerObj = players.find(p => p.id === id);
             const streakBox = document.getElementById('personal-streak-box');
-            
-            if (playerObj) {
+            if (playerObj && streakBox) {
                 let banners = [];
                 if (playerObj.win_streak >= 2) {
                     banners.push(`<div class="streak-banner">🔥 Hot streak! You're on a <strong>${playerObj.win_streak} game winning streak</strong>!</div>`);
@@ -474,11 +443,12 @@
 
             const currentStatus = rsvps[id];
             const statusBox = document.getElementById('current-status-box');
-            
-            if (currentStatus) {
-                statusBox.innerHTML = `<div class="status-badge status-${currentStatus}">Current Status: You're ${currentStatus}</div>`;
-            } else {
-                statusBox.innerHTML = `<p style="color:#6c757d;">You haven't responded yet for this week.</p>`;
+            if (statusBox) {
+                if (currentStatus) {
+                    statusBox.innerHTML = `<div class="status-badge status-${currentStatus}">Current Status: You're ${currentStatus}</div>`;
+                } else {
+                    statusBox.innerHTML = `<p style="color:#6c757d; font-size:0.9rem;">No response recorded yet for ${matchDateStr || 'next fixture'}.</p>`;
+                }
             }
         }
 
@@ -493,16 +463,21 @@
         }
 
         function submitVote(status) {
-            document.getElementById('form-status').value = status;
-            document.getElementById('rsvp-form').submit();
+            const formStatus = document.getElementById('form-status');
+            const rsvpForm = document.getElementById('rsvp-form');
+            if (formStatus && rsvpForm) {
+                formStatus.value = status;
+                rsvpForm.submit();
+            }
         }
 
         function clearSavedPlayer() {
             removeStorage('5aside_player_id');
             removeStorage('5aside_player_name');
-            document.getElementById('rsvp-step').style.display = 'none';
-            document.getElementById('new-player-step').style.display = 'none';
-            document.getElementById('select-step').style.display = 'block';
+            const rsvpStep = document.getElementById('rsvp-step');
+            const selectStep = document.getElementById('select-step');
+            if (rsvpStep) rsvpStep.style.display = 'none';
+            if (selectStep) selectStep.style.display = 'block';
 
             const pollVoterId = document.getElementById('poll-voter-id');
             const recognizedMsg = document.getElementById('voter-recognized-msg');
@@ -513,16 +488,14 @@
             if (recognizedMsg) recognizedMsg.style.display = 'none';
             if (selectWrapper) selectWrapper.style.display = 'block';
             if (candidateSelect) {
-                Array.from(candidateSelect.options).forEach(opt => {
-                    opt.disabled = false;
-                });
+                Array.from(candidateSelect.options).forEach(opt => { opt.disabled = false; });
             }
         }
 
         init();
     </script>
     
-    <!-- FULL NAV DOCK (RSVP PAGE) -->
+    <!-- FULL NAV DOCK -->
     <div class="app-nav-dock">
         <button type="button" class="dock-btn" onclick="history.back()" title="Back">◀</button>
         <button type="button" class="dock-btn" onclick="location.reload()" title="Refresh">🔄</button>

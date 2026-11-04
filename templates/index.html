@@ -16,6 +16,8 @@
         .btn-secondary:hover { background: #5a6268; }
         .btn-danger { background: #dc3545; }
         .btn-danger:hover { background: #bd2130; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
         
         /* Matchup & Draggable Cards */
         .matchup-container { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 15px; }
@@ -374,6 +376,73 @@
     }
     </script>
     {% endif %}
+
+    <!-- ⚙️ GROUP SETTINGS & FIXTURE SCHEDULE -->
+    <details style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 14px 18px; margin-bottom: 25px;">
+        <summary style="font-weight: bold; cursor: pointer; color: #1e3a8a; font-size: 1.05rem;">
+            ⚙️ Group Settings, Fixture Timings & Holiday Skips
+        </summary>
+        
+        <form method="POST" action="/settings" style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+            <div>
+                <label style="font-weight: 600; font-size: 0.85rem;">Group / League Name:</label>
+                <input type="text" name="team_name" value="{{ settings.team_name }}" required style="width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="font-weight: 600; font-size: 0.85rem;">Pitch / Venue Address:</label>
+                <input type="text" name="venue_address" value="{{ settings.venue_address }}" placeholder="e.g. Lucozade Powerleague, SE11" style="width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="font-weight: 600; font-size: 0.85rem;">Match Day:</label>
+                <select name="match_weekday" style="width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="0" {% if settings.match_weekday == 0 %}selected{% endif %}>Monday</option>
+                    <option value="1" {% if settings.match_weekday == 1 %}selected{% endif %}>Tuesday</option>
+                    <option value="2" {% if settings.match_weekday == 2 %}selected{% endif %}>Wednesday</option>
+                    <option value="3" {% if settings.match_weekday == 3 %}selected{% endif %}>Thursday</option>
+                    <option value="4" {% if settings.match_weekday == 4 %}selected{% endif %}>Friday</option>
+                    <option value="5" {% if settings.match_weekday == 5 %}selected{% endif %}>Saturday</option>
+                    <option value="6" {% if settings.match_weekday == 6 %}selected{% endif %}>Sunday</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-weight: 600; font-size: 0.85rem;">Kickoff Time:</label>
+                <input type="time" name="match_time" value="{{ settings.match_time }}" required style="width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="font-weight: 600; font-size: 0.85rem;">Frequency:</label>
+                <select name="frequency_weeks" style="width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="1" {% if settings.frequency_weeks == 1 %}selected{% endif %}>Every week</option>
+                    <option value="2" {% if settings.frequency_weeks == 2 %}selected{% endif %}>Every 2 weeks (Fortnightly)</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-weight: 600; font-size: 0.85rem;">Lock RSVP Before Kickoff:</label>
+                <select name="rsvp_cutoff_minutes" style="width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="30" {% if settings.rsvp_cutoff_minutes == 30 %}selected{% endif %}>30 mins prior</option>
+                    <option value="60" {% if settings.rsvp_cutoff_minutes == 60 %}selected{% endif %}>1 hour prior</option>
+                    <option value="120" {% if settings.rsvp_cutoff_minutes == 120 %}selected{% endif %}>2 hours prior</option>
+                </select>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <button type="submit" class="btn" style="padding: 8px 16px; font-size: 0.9rem;">💾 Save Settings</button>
+            </div>
+        </form>
+
+        <hr style="margin: 18px 0; border: 0; border-top: 1px solid #eee;">
+
+        <!-- 🏖️ SKIP UPCOMING DATES -->
+        <h5 style="margin: 0 0 8px 0; font-size: 0.95rem;">🏖️ Next 4 Scheduled Fixtures (Click to Skip Public Holidays):</h5>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            {% for fix in target_fixtures %}
+            <form method="POST" action="/toggle-skip-date" style="margin: 0;">
+                <input type="hidden" name="date" value="{{ fix.date }}">
+                <button type="submit" class="btn {{ 'btn-danger' if fix.is_skipped else 'btn-success' }}" style="padding: 6px 12px; font-size: 0.85rem;">
+                    {{ fix.date }} ({{ 'SKIPPED 🏖️' if fix.is_skipped else 'ON ⚽' }})
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </details>
 
     <!-- PLAYER CHECKLIST & TEAM GENERATOR -->
     <form method="POST" action="/generate">
