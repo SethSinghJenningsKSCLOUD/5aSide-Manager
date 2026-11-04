@@ -205,20 +205,41 @@
             <div id="personal-streak-box"></div>
             <div id="current-status-box"></div>
 
-            <!-- Standard RSVP Form (always available so players can change status or RSVP without voting) -->
+            {% if active_poll_match %}
+            <!-- Star Poll is active: hide large duplicate buttons to keep UI clean -->
+            <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px; margin-top: 15px;">
+                <p style="margin: 0 0 6px 0; font-size: 0.88rem; color: #475569;">
+                    ⭐ <strong>Star Player poll is active above!</strong><br>
+                    Cast your vote and confirm your RSVP for next week in one tap.
+                </p>
+                <div id="direct-rsvp-form" style="display: none; margin-top: 10px;">
+                    <form action="/rsvp" method="POST" id="rsvp-form">
+                        <input type="hidden" name="player_id" id="form-player-id">
+                        <input type="hidden" name="status" id="form-status">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-in" onclick="submitVote('IN')">I'm In 🟢</button>
+                            <button type="button" class="btn btn-out" onclick="submitVote('OUT')">I'm Out 🔴</button>
+                        </div>
+                    </form>
+                </div>
+                <span class="switch-link" style="margin-top: 6px; font-size: 0.8rem;" onclick="document.getElementById('direct-rsvp-form').style.display='block'; this.style.display='none';">
+                    Didn't play? RSVP without voting ➔
+                </span>
+            </div>
+            {% else %}
+            <!-- Standard RSVP Buttons (When NO poll is active) -->
             <form action="/rsvp" method="POST" id="rsvp-form">
                 <input type="hidden" name="player_id" id="form-player-id">
                 <input type="hidden" name="status" id="form-status">
-                
                 <div class="btn-group">
                     <button type="button" class="btn btn-in" onclick="submitVote('IN')">I'm In 🟢</button>
                     <button type="button" class="btn btn-out" onclick="submitVote('OUT')">I'm Out 🔴</button>
                 </div>
             </form>
+            {% endif %}
 
             <span class="switch-link" onclick="clearSavedPlayer()">Not you? Switch player</span>
         </div>
-        {% endif %}
 
         <!-- LIVE ROSTER -->
         <div class="roster-section">

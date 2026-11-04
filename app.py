@@ -296,146 +296,167 @@ def get_player_stats():
 @app.route("/")
 @admin_required
 def index():
-    settings = get_settings()
-    upcoming_date = get_upcoming_match_date()
-    target_fixtures = get_target_fixture_dates(4)
+    try:
+        settings = get_settings()
+        upcoming_date = get_upcoming_match_date()
+        target_fixtures = get_target_fixture_dates(4)
 
-    response = supabase.table("players").select("*").order("name").execute()
-    players = response.data or []
-    player_map = {p["id"]: p["name"] for p in players}
+        response = supabase.table("players").select("*").order("name").execute()
+        players = response.data or []
+        player_map = {p["id"]: p["name"] for p in players}
 
-    avail_resp = (
-        supabase.table("availability")
-        .select("*")
-        .eq("match_date", str(upcoming_date))
-        .execute()
-    )
-    in_player_ids = [
-        row["player_id"]
-        for row in (avail_resp.data or [])
-        if row["status"] == "IN"
-    ]
-
-    for p in players:
-        p["auto_select"] = p["id"] in in_player_ids
-
-    late_flakes_resp = (
-        supabase.table("flake_logs")
-        .select("*, players(name)")
-        .eq("match_date", str(upcoming_date))
-        .eq("is_late", True)
-        .order("created_at", desc=True)
-        .execute()
-    )
-    late_alerts = late_flakes_resp.data or []
-
-    # 1. Check for active uncompleted draft
-    draft_res = (
-        supabase.table("matches")
-        .select("*")
-        .eq("match_date", str(upcoming_date))
-        .eq("is_completed", False)
-        .execute()
-    )
-    draft_match = draft_res.data[0] if draft_res.data else None
-    match_result = None
-
-    if draft_match:
-        att_res = (
-            supabase.table("match_attendance")
-            .select("player_id, team_assigned, players(id, name, elo_rating)")
-            .eq("match_id", draft_match["id"])
+        avail_resp = (
+            supabase.table("availability")
+            .select("*")
+            .eq("match_date", str(upcoming_date))
             .execute()
         )
-        team_a_players = []
-        team_b_players = []
-        for row in (att_res.data or []):
-            p = row.get("players")
-            if p:
-                if row.get("team_assigned") == "A":
-                    team_a_players.append(p)
-                else:
-                    team_b_players.append(p)
-
-        if team_a_players and team_b_players:
-            rating_a = sum(p["elo_rating"] for p in team_a_players)
-            rating_b = sum(p["elo_rating"] for p in team_b_players)
-            match_result = {
-                "match_id": draft_match["id"],
-                "match_date": str(upcoming_date),
-                "team_a": [p["name"] for p in team_a_players],
-                "team_b": [p["name"] for p in team_b_players],
-                "team_a_ids": [p["id"] for p in team_a_players],
-                "team_b_ids": [p["id"] for p in team_b_players],
-                "team_a_rating": round(rating_a / len(team_a_players)),
-                "team_b_rating": round(rating_b / len(team_b_players)),
-                "rating_diff": round(abs(rating_a - rating_b)),
-                "selected_players": team_a_players + team_b_players,
-            }
-
-    # 2. Check most recent completed match for Star Player
-    recent_match_res = (
-        supabase.table("matches")
-        .select("*")
-        .eq("is_completed", True)
-        .order("match_date", desc=True)
-        .limit(1)
-        .execute()
-    )
-    last_completed = recent_match_res.data[0] if recent_match_res.data else None
-    pending_mvp_poll = None
-
-    if last_completed:
-        att_res = (
-            supabase.table("match_attendance")
-            .select("player_id, players(id, name)")
-            .eq("match_id", last_completed["id"])
-            .execute()
-        )
-        attendees = [
-            {"id": row["players"]["id"], "name": row["players"]["name"]}
-            for row in (att_res.data or [])
-            if row.get("players")
+        in_player_ids = [
+            row["player_id"]
+            for row in (avail_resp.data or [])
+            if row["status"] == "IN"
         ]
 
-        votes_res = (
-            supabase.table("mvp_votes")
-            .select("voter_id, voted_for_id")
-            .eq("match_id", last_completed["id"])
+        for p in players:
+            p["auto_select"] = p["id"] in in_player_ids
+
+        # Safe flake query (uses dropped_at)
+        late_alerts = []
+        try:
+            late_flakes_resp = (
+                supabase.table("flake_logs")
+                .select("*, players(name)")
+                .eq("match_date", str(upcoming_date))
+                .eq("is_late", True)
+                .order("dropped_at", desc=True)
+                .execute()
+            )
+            late_alerts = late_flakes_resp.data or []
+        except Exception as flake_err:
+            print(f"flake_logs lookup note: {flake_err}")
+
+        # 1. Check for active uncompleted draft
+        draft_res = (
+            supabase.table("matches")
+            .select("*")
+            .eq("match_date", str(upcoming_date))
+            .eq("is_completed", False)
             .execute()
         )
-        votes_list = votes_res.data or []
+        draft_match = draft_res.data[0] if draft_res.data else None
+        match_result = None
 
-        tally = {p["id"]: {"id": p["id"], "name": p["name"], "votes": 0} for p in attendees}
-        for v in votes_list:
-            tgt = v.get("voted_for_id")
-            if tgt in tally:
-                tally[tgt]["votes"] += 1
-            elif tgt in player_map:
-                tally[tgt] = {"id": tgt, "name": player_map[tgt], "votes": 1}
+        if draft_match:
+            att_res = (
+                supabase.table("match_attendance")
+                .select("player_id, team_assigned, players(id, name, elo_rating)")
+                .eq("match_id", draft_match["id"])
+                .execute()
+            )
+            team_a_players = []
+            team_b_players = []
+            for row in (att_res.data or []):
+                p = row.get("players")
+                if p:
+                    if row.get("team_assigned") == "A":
+                        team_a_players.append(p)
+                    else:
+                        team_b_players.append(p)
 
-        ranked_candidates = sorted(tally.values(), key=lambda x: x["votes"], reverse=True)
-        current_mvp_id = last_completed.get("mvp_player_id")
-        current_mvp_name = player_map.get(current_mvp_id) if current_mvp_id else None
+            if team_a_players and team_b_players:
+                rating_a = sum((p.get("elo_rating") or 1000) for p in team_a_players)
+                rating_b = sum((p.get("elo_rating") or 1000) for p in team_b_players)
+                match_result = {
+                    "match_id": draft_match["id"],
+                    "match_date": str(upcoming_date),
+                    "team_a": [p["name"] for p in team_a_players],
+                    "team_b": [p["name"] for p in team_b_players],
+                    "team_a_ids": [p["id"] for p in team_a_players],
+                    "team_b_ids": [p["id"] for p in team_b_players],
+                    "team_a_rating": round(rating_a / len(team_a_players)),
+                    "team_b_rating": round(rating_b / len(team_b_players)),
+                    "rating_diff": round(abs(rating_a - rating_b)),
+                    "selected_players": team_a_players + team_b_players,
+                }
 
-        pending_mvp_poll = {
-            "match": last_completed,
-            "results": ranked_candidates,
-            "total_votes": len(votes_list),
-            "current_mvp_id": current_mvp_id,
-            "current_mvp_name": current_mvp_name,
-        }
+        # 2. Check most recent completed match for Star Player
+        recent_match_res = (
+            supabase.table("matches")
+            .select("*")
+            .eq("is_completed", True)
+            .order("match_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        last_completed = recent_match_res.data[0] if recent_match_res.data else None
+        pending_mvp_poll = None
 
-    return render_template(
-        "index.html",
-        settings=settings,
-        target_fixtures=target_fixtures,
-        players=players,
-        match_result=match_result,
-        late_alerts=late_alerts,
-        upcoming_date=upcoming_date,
-        pending_mvp_poll=pending_mvp_poll,
-    )
+        if last_completed:
+            att_res = (
+                supabase.table("match_attendance")
+                .select("player_id, players(id, name)")
+                .eq("match_id", last_completed["id"])
+                .execute()
+            )
+            attendees = [
+                {"id": row["players"]["id"], "name": row["players"]["name"]}
+                for row in (att_res.data or [])
+                if row.get("players")
+            ]
+
+            votes_res = (
+                supabase.table("mvp_votes")
+                .select("voter_id, voted_for_id")
+                .eq("match_id", last_completed["id"])
+                .execute()
+            )
+            votes_list = votes_res.data or []
+
+            tally = {p["id"]: {"id": p["id"], "name": p["name"], "votes": 0} for p in attendees}
+            for v in votes_list:
+                tgt = v.get("voted_for_id")
+                if tgt in tally:
+                    tally[tgt]["votes"] += 1
+                elif tgt in player_map:
+                    tally[tgt] = {"id": tgt, "name": player_map[tgt], "votes": 1}
+
+            ranked_candidates = sorted(tally.values(), key=lambda x: x["votes"], reverse=True)
+            current_mvp_id = last_completed.get("mvp_player_id")
+            current_mvp_name = player_map.get(current_mvp_id) if current_mvp_id else None
+
+            pending_mvp_poll = {
+                "match": last_completed,
+                "results": ranked_candidates,
+                "total_votes": len(votes_list),
+                "current_mvp_id": current_mvp_id,
+                "current_mvp_name": current_mvp_name,
+            }
+
+        return render_template(
+            "index.html",
+            settings=settings,
+            target_fixtures=target_fixtures,
+            players=players,
+            match_result=match_result,
+            late_alerts=late_alerts,
+            upcoming_date=upcoming_date,
+            pending_mvp_poll=pending_mvp_poll,
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        flash(f"⚠️ Error loading admin dashboard: {e}")
+        return render_template(
+            "index.html",
+            settings=get_settings(),
+            target_fixtures=get_target_fixture_dates(4),
+            players=[],
+            match_result=None,
+            late_alerts=[],
+            upcoming_date=get_upcoming_match_date(),
+            pending_mvp_poll=None,
+        )
 
 
 @app.route("/sync-attendance", methods=["POST"])
